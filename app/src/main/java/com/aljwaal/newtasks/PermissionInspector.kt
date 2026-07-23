@@ -28,11 +28,12 @@ object PermissionInspector {
         val notifications = notificationPermission &&
             NotificationManagerCompat.from(context).areNotificationsEnabled()
 
-        val alarmManager = context.getSystemService(AlarmManager::class.java)
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val exactAlarms = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
             alarmManager.canScheduleExactAlarms()
 
-        val notificationManager = context.getSystemService(NotificationManager::class.java)
+        val notificationManager =
+            context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val fullScreen = Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE ||
             notificationManager.canUseFullScreenIntent()
 
@@ -41,8 +42,12 @@ object PermissionInspector {
                 NotificationManager.IMPORTANCE_NONE
         } else true
 
-        val powerManager = context.getSystemService(PowerManager::class.java)
-        val batteryUnrestricted = powerManager.isIgnoringBatteryOptimizations(context.packageName)
+        val batteryUnrestricted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+            powerManager.isIgnoringBatteryOptimizations(context.packageName)
+        } else {
+            true
+        }
 
         return PermissionSnapshot(
             notifications = notifications,
