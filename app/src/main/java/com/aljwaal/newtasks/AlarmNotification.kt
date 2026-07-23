@@ -10,6 +10,7 @@ import android.graphics.Color
 import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 
 object AlarmNotification {
     const val CHANNEL_ID = "smart_tasks_urgent_alarm_v2"
@@ -19,18 +20,20 @@ object AlarmNotification {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (manager.getNotificationChannel(CHANNEL_ID) != null) return
-        manager.createNotificationChannel(NotificationChannel(
-            CHANNEL_ID,
-            "تنبيهات المهام العاجلة",
-            NotificationManager.IMPORTANCE_HIGH
-        ).apply {
-            description = "تنبيهات المهام مع شاشة كاملة وصوت واهتزاز"
-            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-            enableLights(true)
-            lightColor = Color.RED
-            enableVibration(false)
-            setSound(null, null)
-        })
+        manager.createNotificationChannel(
+            NotificationChannel(
+                CHANNEL_ID,
+                "تنبيهات المهام العاجلة",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "تنبيهات المهام مع شاشة كاملة وصوت واهتزاز"
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                enableLights(true)
+                lightColor = Color.RED
+                enableVibration(false)
+                setSound(null, null)
+            }
+        )
         AppLog.write(context, "NOTIFICATION_CHANNEL_CREATED", "id=$CHANNEL_ID")
     }
 
@@ -42,43 +45,74 @@ object AlarmNotification {
         kind: String
     ): Notification {
         ensureChannel(context)
-        val fullScreenIntent = Intent(context, AlarmActivity::class.java).apply {
-            data = Uri.parse("smarttasks://ring/$kind/${taskId.ifBlank { "test" }}")
-            putExtra(AlarmScheduler.EXTRA_TASK_ID, taskId)
-            putExtra(AlarmScheduler.EXTRA_TITLE, title)
-            putExtra(AlarmScheduler.EXTRA_NOTES, notes)
-            putExtra(AlarmScheduler.EXTRA_KIND, kind)
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-        }
-        val fullScreenPendingIntent = PendingIntent.getActivity(
-            context,
-            3101 + taskId.hashCode().and(0x0FFF),
-            fullScreenIntent,
-            pendingIntentFlags()
+        val fullScreenPendingIntent = AlarmActivityLauncher.pendingIntent(
+            context = context,
+            requestCode = stableRequestCode("screen:$kind:$taskId", 3_101),
+            taskId = taskId,
+            title = title,
+            notes = notes,
+            kind = kind
         )
 
+        val body = notes.ifBlank { "حان موعد المهمة — اضغط لفتح شاشة التنبيه" }
         return NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_alarm)
             .setColor(0xFF4F46E5.toInt())
             .setContentTitle(title)
-            .setContentText(notes.ifBlank { "حان موعد المهمة" })
-            .setStyle(NotificationCompat.BigTextStyle().bigText(notes.ifBlank { "حان موعد المهمة — اضغط لفتح شاشة التنبيه" }))
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setOngoing(true)
             .setAutoCancel(false)
+            .setOnlyAlertOnce(true)
             .setContentIntent(fullScreenPendingIntent)
             .setFullScreenIntent(fullScreenPendingIntent, true)
             .setSilent(true)
-            .addAction(0, "تم الإنجاز", actionPendingIntent(context, AlarmActionReceiver.ACTION_DONE, taskId, title, notes, 3201))
-            .addAction(0, "تأجيل 5 دقائق", actionPendingIntent(context, AlarmActionReceiver.ACTION_SNOOZE_5, taskId, title, notes, 3202))
-            .addAction(0, "تأجيل 10 دقائق", actionPendingIntent(context, AlarmActionReceiver.ACTION_SNOOZE_10, taskId, title, notes, 3203))
+            .addAction(
+                R.drawable.ic_alarm,
+                "تم الإنجاز",
+                actionPendingIntent(context, AlarmActionReceiver.ACTION_DONE, taskId, title, notes, 3_201)
+            )
+            .addAction(
+                R.drawable.ic_alarm,
+                "تأجيل 5 دقائق",
+                actionPendingIntent(context, AlarmActionReceiver.ACTION_SNOOZE_5, taskId, title, notes, 3_202)
+            )
+            .addAction(
+                R.drawable.ic_alarm,
+                "تأجيل 10 دقائق",
+                actionPendingIntent(context, AlarmActionReceiver.ACTION_SNOOZE_10, taskId, title, notes, 3_203)
+            )
             .build()
     }
 
+    fun post(
+        context: Context,
+        taskId: String,
+        title: String,
+        notes: String,
+        kind: String
+    ): Boolean = runCatching {
+        NotificationManagerCompat.from(context).notify(
+            NOTIFICATION_ID,
+            build(context, taskId, title, notes, kind)
+        )
+        AppLog.write(context, "NOTIFICATION_POSTED_DIRECTLY", "kind=$kind task=$taskId")
+        true
+    }.getOrElse { error ->
+        AppLog.write(
+            context,
+            "NOTIFICATION_POST_FAILED",
+            "${error.javaClass.simpleName}: ${error.message}"
+        )
+        false
+    }
+
     fun cancel(context: Context) {
-        (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).cancel(NOTIFICATION_ID)
+        (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+            .cancel(NOTIFICATION_ID)
     }
 
     private fun actionPendingIntent(
@@ -90,7 +124,7 @@ object AlarmNotification {
         baseCode: Int
     ): PendingIntent = PendingIntent.getBroadcast(
         context,
-        baseCode + taskId.hashCode().and(0x0FFF),
+        stableRequestCode("$action:$taskId", baseCode),
         Intent(context, AlarmActionReceiver::class.java).apply {
             this.action = action
             data = Uri.parse("smarttasks://action/$action/${taskId.ifBlank { "test" }}")
@@ -101,6 +135,10 @@ object AlarmNotification {
         pendingIntentFlags()
     )
 
-    private fun pendingIntentFlags(): Int = PendingIntent.FLAG_UPDATE_CURRENT or
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
+    private fun stableRequestCode(value: String, base: Int): Int =
+        base + (value.hashCode().toLong() and 0x7FFFFFFFL).rem(100_000L).toInt()
+
+    private fun pendingIntentFlags(): Int =
+        PendingIntent.FLAG_UPDATE_CURRENT or
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
 }
