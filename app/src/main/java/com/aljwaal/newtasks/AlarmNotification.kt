@@ -16,7 +16,7 @@ object AlarmNotification {
 
     fun ensureChannel(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        val manager = context.getSystemService(NotificationManager::class.java)
+        val manager = notificationManager(context)
         val existing = manager.getNotificationChannel(CHANNEL_ID)
         if (existing != null) return
 
@@ -50,7 +50,7 @@ object AlarmNotification {
             context,
             3101,
             fullScreenIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            pendingIntentFlags()
         )
 
         return NotificationCompat.Builder(context, CHANNEL_ID)
@@ -86,7 +86,7 @@ object AlarmNotification {
     }
 
     fun cancel(context: Context) {
-        context.getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
+        notificationManager(context).cancel(NOTIFICATION_ID)
     }
 
     private fun actionPendingIntent(context: Context, action: String, requestCode: Int): PendingIntent {
@@ -94,7 +94,14 @@ object AlarmNotification {
             context,
             requestCode,
             Intent(context, AlarmActionReceiver::class.java).setAction(action),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            pendingIntentFlags()
         )
     }
+
+    private fun notificationManager(context: Context): NotificationManager =
+        context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+    private fun pendingIntentFlags(): Int =
+        PendingIntent.FLAG_UPDATE_CURRENT or
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
 }
