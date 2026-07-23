@@ -1,34 +1,53 @@
 package com.aljwaal.newtasks
 
 import android.content.Context
-import org.json.JSONArray
-import org.json.JSONObject
 import java.io.File
 import java.util.Calendar
+import org.json.JSONArray
+import org.json.JSONObject
 
 object TaskRepository {
     private const val PREFS = "smart_tasks_data_v2"
     private const val KEY_DATA = "data"
     private val lock = Any()
-    private val defaultCategories = listOf("عام", "العمل", "المنزل", "الدراسة", "الصحة", "المواعيد")
+    private val defaultCategories = listOf(
+        "عام",
+        "العمل",
+        "المنزل",
+        "الدراسة",
+        "الصحة",
+        "المواعيد"
+    )
 
     fun list(context: Context): List<TaskItem> = synchronized(lock) {
         readRoot(context).optJSONArray("tasks").toTaskList()
-            .sortedWith(compareBy<TaskItem> { it.status == TaskStatus.COMPLETED }
-                .thenByDescending { it.priority.rank }
-                .thenBy { it.dueAtMillis })
+            .sortedWith(
+                compareBy<TaskItem> { it.status == TaskStatus.COMPLETED }
+                    .thenByDescending { it.priority.rank }
+                    .thenBy { it.dueAtMillis }
+            )
     }
 
-    fun get(context: Context, id: String): TaskItem? = list(context).firstOrNull { it.id == id }
+    fun get(context: Context, id: String): TaskItem? =
+        list(context).firstOrNull { it.id == id }
 
     fun save(context: Context, task: TaskItem) = synchronized(lock) {
+        val normalized = task.copy(
+            title = NumberFormatUtils.latinDigits(task.title).trim(),
+            notes = NumberFormatUtils.latinDigits(task.notes),
+            category = NumberFormatUtils.latinDigits(task.category).trim().ifBlank { "عام" }
+        )
         val root = readRoot(context)
         val tasks = root.optJSONArray("tasks").toTaskList().toMutableList()
-        val index = tasks.indexOfFirst { it.id == task.id }
-        if (index >= 0) tasks[index] = task else tasks.add(task)
+        val index = tasks.indexOfFirst { it.id == normalized.id }
+        if (index >= 0) tasks[index] = normalized else tasks.add(normalized)
         root.put("tasks", JSONArray(tasks.map(::taskToJson)))
         writeRoot(context, root)
-        AppLog.write(context, "TASK_SAVED", "id=${task.id} status=${task.status} due=${task.dueAtMillis}")
+        AppLog.write(
+            context,
+            "TASK_SAVED",
+            "id=${normalized.id} status=${normalized.status} due=${normalized.dueAtMillis}"
+        )
     }
 
     fun delete(context: Context, id: String) = synchronized(lock) {
@@ -39,7 +58,11 @@ object TaskRepository {
         AppLog.write(context, "TASK_DELETED", "id=$id")
     }
 
-    fun markCompleted(context: Context, id: String, completed: Boolean = true): TaskItem? {
+    fun markCompleted(
+        context: Context,
+        id: String,
+        completed: Boolean = true
+    ): TaskItem? {
         val current = get(context, id) ?: return null
         val updated = current.copy(
             status = if (completed) TaskStatus.COMPLETED else TaskStatus.PENDING,
@@ -49,7 +72,11 @@ object TaskRepository {
         return updated
     }
 
-    fun updateLastNotified(context: Context, id: String, value: Long = System.currentTimeMillis()) {
+    fun updateLastNotified(
+        context: Context,
+        id: String,
+        value: Long = System.currentTimeMillis()
+    ) {
         val current = get(context, id) ?: return
         save(context, current.copy(lastNotifiedAtMillis = value))
     }
@@ -58,17 +85,21 @@ object TaskRepository {
         val root = readRoot(context)
         val stored = root.optJSONArray("categories").toStringList()
         (defaultCategories + stored + root.optJSONArray("tasks").toTaskList().map { it.category })
-            .map { it.trim() }
+            .map { NumberFormatUtils.latinDigits(it).trim() }
             .filter { it.isNotEmpty() }
             .distinct()
     }
 
     fun addCategory(context: Context, value: String): Boolean = synchronized(lock) {
-        val name = value.trim()
+        val name = NumberFormatUtils.latinDigits(value).trim()
         if (name.isEmpty()) return false
         val root = readRoot(context)
         val categories = root.optJSONArray("categories").toStringList().toMutableList()
-        if (categories.any { it.equals(name, ignoreCase = true) } || defaultCategories.any { it == name }) return false
+        if (categories.any { it.equals(name, ignoreCase = true) } ||
+            defaultCategories.any { it == name }
+        ) {
+            return false
+        }
         categories.add(name)
         root.put("categories", JSONArray(categories))
         writeRoot(context, root)
@@ -89,9 +120,15 @@ object TaskRepository {
         val todayEnd = NumberFormatUtils.endOfDay(now)
         val todayStart = NumberFormatUtils.startOfDay(now)
         return TaskStats(
-            today = tasks.count { it.status == TaskStatus.PENDING && it.dueAtMillis in todayStart..todayEnd },
-            upcoming = tasks.count { it.status == TaskStatus.PENDING && it.dueAtMillis > todayEnd },
-            overdue = tasks.count { it.status == TaskStatus.PENDING && it.dueAtMillis < now },
+            today = tasks.count {
+                it.status == TaskStatus.PENDING && it.dueAtMillis in todayStart..todayEnd
+            },
+            upcoming = tasks.count {
+                it.status == TaskStatus.PENDING && it.dueAtMillis > todayEnd
+            },
+            overdue = tasks.count {
+                it.status == TaskStatus.PENDING && it.dueAtMillis < now
+            },
             completed = tasks.count { it.status == TaskStatus.COMPLETED },
             total = tasks.size
         )
@@ -127,11 +164,14 @@ object TaskRepository {
         val tasks = root.optJSONArray("tasks").toTaskList()
         require(tasks.all { it.title.isNotBlank() }) { "ملف النسخة الاحتياطية غير صالح" }
         synchronized(lock) {
-            writeRoot(context, JSONObject().apply {
-                put("tasks", JSONArray(tasks.map(::taskToJson)))
-                put("categories", root.optJSONArray("categories") ?: JSONArray())
-                put("schemaVersion", 2)
-            })
+            writeRoot(
+                context,
+                JSONObject().apply {
+                    put("tasks", JSONArray(tasks.map(::taskToJson)))
+                    put("categories", root.optJSONArray("categories") ?: JSONArray())
+                    put("schemaVersion", 2)
+                }
+            )
         }
         AppLog.write(context, "BACKUP_IMPORTED", "tasks=${tasks.size}")
         tasks.size
@@ -147,23 +187,29 @@ object TaskRepository {
 
     fun restoreLocalBackup(context: Context): Result<Int> {
         val file = File(File(context.filesDir, "backups"), "smart_tasks_backup.json")
-        return if (!file.exists()) Result.failure(IllegalStateException("لا توجد نسخة احتياطية محلية"))
-        else importJson(context, file.readText(Charsets.UTF_8))
+        return if (!file.exists()) {
+            Result.failure(IllegalStateException("لا توجد نسخة احتياطية محلية"))
+        } else {
+            importJson(context, file.readText(Charsets.UTF_8))
+        }
     }
 
     private fun readRoot(context: Context): JSONObject {
         val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val text = prefs.getString(KEY_DATA, null)
-        return runCatching { if (text.isNullOrBlank()) initialRoot() else JSONObject(text) }
-            .getOrElse {
-                AppLog.write(context, "DATA_READ_FAILED", it.message.orEmpty())
-                initialRoot()
-            }
+        return runCatching {
+            if (text.isNullOrBlank()) initialRoot() else JSONObject(text)
+        }.getOrElse {
+            AppLog.write(context, "DATA_READ_FAILED", it.message.orEmpty())
+            initialRoot()
+        }
     }
 
     private fun writeRoot(context: Context, root: JSONObject) {
         context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .edit().putString(KEY_DATA, root.toString()).commit()
+            .edit()
+            .putString(KEY_DATA, root.toString())
+            .apply()
     }
 
     private fun initialRoot() = JSONObject().apply {
@@ -192,22 +238,34 @@ object TaskRepository {
         return buildList {
             for (index in 0 until length()) {
                 val item = optJSONObject(index) ?: continue
-                val title = item.optString("title").trim()
+                val title = NumberFormatUtils.latinDigits(item.optString("title")).trim()
                 if (title.isEmpty()) continue
-                add(TaskItem(
-                    id = item.optString("id").ifBlank { java.util.UUID.randomUUID().toString() },
-                    title = title,
-                    notes = item.optString("notes"),
-                    category = item.optString("category", "عام"),
-                    dueAtMillis = item.optLong("dueAtMillis", System.currentTimeMillis()),
-                    priority = TaskPriority.from(item.optString("priority")),
-                    status = TaskStatus.from(item.optString("status")),
-                    repeatRule = RepeatRule.from(item.optString("repeatRule")),
-                    reminderEnabled = item.optBoolean("reminderEnabled", true),
-                    createdAtMillis = item.optLong("createdAtMillis", System.currentTimeMillis()),
-                    completedAtMillis = item.optLong("completedAtMillis", 0L),
-                    lastNotifiedAtMillis = item.optLong("lastNotifiedAtMillis", 0L)
-                ))
+                add(
+                    TaskItem(
+                        id = item.optString("id").ifBlank {
+                            java.util.UUID.randomUUID().toString()
+                        },
+                        title = title,
+                        notes = NumberFormatUtils.latinDigits(item.optString("notes")),
+                        category = NumberFormatUtils.latinDigits(
+                            item.optString("category", "عام")
+                        ),
+                        dueAtMillis = item.optLong(
+                            "dueAtMillis",
+                            System.currentTimeMillis()
+                        ),
+                        priority = TaskPriority.from(item.optString("priority")),
+                        status = TaskStatus.from(item.optString("status")),
+                        repeatRule = RepeatRule.from(item.optString("repeatRule")),
+                        reminderEnabled = item.optBoolean("reminderEnabled", true),
+                        createdAtMillis = item.optLong(
+                            "createdAtMillis",
+                            System.currentTimeMillis()
+                        ),
+                        completedAtMillis = item.optLong("completedAtMillis", 0L),
+                        lastNotifiedAtMillis = item.optLong("lastNotifiedAtMillis", 0L)
+                    )
+                )
             }
         }
     }
@@ -215,7 +273,11 @@ object TaskRepository {
     private fun JSONArray?.toStringList(): List<String> {
         if (this == null) return emptyList()
         return buildList {
-            for (index in 0 until length()) optString(index).trim().takeIf { it.isNotEmpty() }?.let(::add)
+            for (index in 0 until length()) {
+                NumberFormatUtils.latinDigits(optString(index)).trim()
+                    .takeIf { it.isNotEmpty() }
+                    ?.let(::add)
+            }
         }
     }
 }
