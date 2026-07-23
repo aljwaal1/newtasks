@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import androidx.annotation.RequiresApi
 
 /**
  * ينشئ ويفعّل PendingIntent موثوقًا لشاشة المنبه.
@@ -25,11 +26,20 @@ object AlarmActivityLauncher {
         kind: String
     ): PendingIntent {
         val intent = alarmIntent(context, taskId, title, notes, kind)
-        val options = creatorOptions()
-        return if (options == null) {
-            PendingIntent.getActivity(context, requestCode, intent, pendingIntentFlags())
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            Api34.createPendingIntent(
+                context,
+                requestCode,
+                intent,
+                pendingIntentFlags()
+            )
         } else {
-            PendingIntent.getActivity(context, requestCode, intent, pendingIntentFlags(), options)
+            PendingIntent.getActivity(
+                context,
+                requestCode,
+                intent,
+                pendingIntentFlags()
+            )
         }
     }
 
@@ -43,13 +53,16 @@ object AlarmActivityLauncher {
     ): Boolean {
         val pendingIntent = pendingIntent(context, requestCode, taskId, title, notes, kind)
         return runCatching {
-            val options = senderOptions()
-            if (options == null) {
-                pendingIntent.send()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                Api34.send(context, pendingIntent)
             } else {
-                pendingIntent.send(context, 0, null, null, null, null, options)
+                pendingIntent.send()
             }
-            AppLog.write(context, "ALARM_ACTIVITY_PENDING_INTENT_SENT", "kind=$kind task=$taskId")
+            AppLog.write(
+                context,
+                "ALARM_ACTIVITY_PENDING_INTENT_SENT",
+                "kind=$kind task=$taskId"
+            )
             true
         }.getOrElse { error ->
             AppLog.write(
@@ -70,8 +83,8 @@ object AlarmActivityLauncher {
     ) = Intent(context, AlarmActivity::class.java).apply {
         data = Uri.parse("smarttasks://ring/$kind/${taskId.ifBlank { "test" }}")
         putExtra(AlarmScheduler.EXTRA_TASK_ID, taskId)
-        putExtra(AlarmScheduler.EXTRA_TITLE, title)
-        putExtra(AlarmScheduler.EXTRA_NOTES, notes)
+        putExtra(AlarmScheduler.EXTRA_TITLE, NumberFormatUtils.latinDigits(title))
+        putExtra(AlarmScheduler.EXTRA_NOTES, NumberFormatUtils.latinDigits(notes))
         putExtra(AlarmScheduler.EXTRA_KIND, kind)
         addFlags(
             Intent.FLAG_ACTIVITY_NEW_TASK or
@@ -80,29 +93,43 @@ object AlarmActivityLauncher {
         )
     }
 
-    private fun creatorOptions(): android.os.Bundle? {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) return null
-        return ActivityOptions.makeBasic().apply {
-            setPendingIntentCreatorBackgroundActivityStartMode(backgroundStartMode())
-        }.toBundle()
-    }
-
-    private fun senderOptions(): android.os.Bundle? {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) return null
-        return ActivityOptions.makeBasic().apply {
-            setPendingIntentBackgroundActivityStartMode(backgroundStartMode())
-        }.toBundle()
-    }
-
-    @Suppress("DEPRECATION")
-    private fun backgroundStartMode(): Int =
-        if (Build.VERSION.SDK_INT >= 36) {
-            ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOW_ALWAYS
-        } else {
-            ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED
-        }
-
     private fun pendingIntentFlags(): Int =
         PendingIntent.FLAG_UPDATE_CURRENT or
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
+
+    @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+    private object Api34 {
+        fun createPendingIntent(
+            context: Context,
+            requestCode: Int,
+            intent: Intent,
+            flags: Int
+        ): PendingIntent {
+            val options = ActivityOptions.makeBasic().apply {
+                setPendingIntentCreatorBackgroundActivityStartMode(mode())
+            }.toBundle()
+            return PendingIntent.getActivity(context, requestCode, intent, flags, options)
+        }
+
+        fun send(context: Context, pendingIntent: PendingIntent) {
+            val options = ActivityOptions.makeBasic().apply {
+                setPendingIntentBackgroundActivityStartMode(mode())
+            }.toBundle()
+            pendingIntent.send(context, 0, null, null, null, null, options)
+        }
+
+        @Suppress("DEPRECATION")
+        private fun mode(): Int =
+            if (Build.VERSION.SDK_INT >= 36) {
+                Api36.allowAlwaysMode()
+            } else {
+                ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED
+            }
+    }
+
+    @RequiresApi(36)
+    private object Api36 {
+        fun allowAlwaysMode(): Int =
+            ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOW_ALWAYS
+    }
 }
