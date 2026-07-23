@@ -31,7 +31,7 @@ object AlarmPlayer {
             .build()
 
         runCatching {
-            audioManager = appContext.getSystemService(AudioManager::class.java)
+            audioManager = appContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
                     .setAudioAttributes(attributes)
@@ -65,14 +65,20 @@ object AlarmPlayer {
 
         runCatching {
             vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                appContext.getSystemService(VibratorManager::class.java).defaultVibrator
+                (appContext.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager)
+                    .defaultVibrator
             } else {
                 @Suppress("DEPRECATION")
                 appContext.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
             }
             val pattern = longArrayOf(0, 700, 350, 700, 350)
-            vibrator?.vibrate(VibrationEffect.createWaveform(pattern, 0))
-            AppLog.write(appContext, "VIBRATION_STARTED")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator?.vibrate(VibrationEffect.createWaveform(pattern, 0))
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator?.vibrate(pattern, 0)
+            }
+            AppLog.write(appContext, "VIBRATION_STARTED", "legacy=${Build.VERSION.SDK_INT < 26}")
         }.onFailure {
             AppLog.write(appContext, "VIBRATION_START_FAILED", it.message.orEmpty())
         }
