@@ -6,7 +6,6 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
-import kotlin.math.absoluteValue
 
 object AlarmScheduler {
     const val ACTION_FIRE = "com.aljwaal.newtasks.action.FIRE_ALARM"
@@ -14,7 +13,6 @@ object AlarmScheduler {
     const val EXTRA_TASK_ID = "task_id"
     const val EXTRA_TITLE = "alarm_title"
     const val EXTRA_NOTES = "alarm_notes"
-    const val EXTRA_FORCE_ACTIVITY = "force_activity"
 
     const val KIND_TASK = "task"
     const val KIND_TEST = "test"
@@ -39,21 +37,20 @@ object AlarmScheduler {
             kind = KIND_TASK,
             taskId = task.id,
             title = task.title,
-            notes = task.notes,
-            forceActivity = true
+            notes = task.notes
         )
     }
 
-    fun scheduleTest(context: Context, delayMillis: Long = 30_000L): ScheduleResult = schedule(
-        context = context,
-        triggerAtMillis = System.currentTimeMillis() + delayMillis,
-        requestCode = 1102,
-        kind = KIND_TEST,
-        taskId = "",
-        title = "اختبار تنبيه المهام",
-        notes = "هذا اختبار للتأكد من عمل الصوت والاهتزاز وشاشة التنبيه.",
-        forceActivity = true
-    )
+    fun scheduleTest(context: Context, delayMillis: Long = 30_000L): ScheduleResult =
+        schedule(
+            context = context,
+            triggerAtMillis = System.currentTimeMillis() + delayMillis,
+            requestCode = 1_102,
+            kind = KIND_TEST,
+            taskId = "",
+            title = "اختبار تنبيه المهام",
+            notes = "هذا اختبار للتأكد من عمل الصوت والاهتزاز وشاشة التنبيه."
+        )
 
     fun scheduleSnooze(
         context: Context,
@@ -70,38 +67,46 @@ object AlarmScheduler {
             kind = KIND_SNOOZE,
             taskId = taskId,
             title = title,
-            notes = notes,
-            forceActivity = true
+            notes = notes
         )
-        AppLog.write(context, "SNOOZE_SCHEDULED", "task=$taskId minutes=$minutes trigger=$triggerAt")
+        AppLog.write(
+            context,
+            "SNOOZE_SCHEDULED",
+            "task=$taskId minutes=$minutes trigger=$triggerAt"
+        )
         return result
     }
 
     fun fireNow(context: Context) {
         AppLog.write(context, "TEST_NOW_REQUESTED")
-        context.sendBroadcast(Intent(context, AlarmReceiver::class.java).apply {
-            action = ACTION_FIRE
-            data = Uri.parse("smarttasks://alarm/test/now")
-            putExtra(EXTRA_KIND, KIND_TEST)
-            putExtra(EXTRA_TASK_ID, "")
-            putExtra(EXTRA_TITLE, "اختبار فوري لتنبيه المهام")
-            putExtra(EXTRA_NOTES, "إذا ظهرت هذه الشاشة مع الصوت والاهتزاز فمحرك التنبيه يعمل بنجاح.")
-            putExtra(EXTRA_FORCE_ACTIVITY, true)
-        })
+        context.sendBroadcast(
+            Intent(context, AlarmReceiver::class.java).apply {
+                action = ACTION_FIRE
+                data = Uri.parse("smarttasks://alarm/test/now")
+                putExtra(EXTRA_KIND, KIND_TEST)
+                putExtra(EXTRA_TASK_ID, "")
+                putExtra(EXTRA_TITLE, "اختبار فوري لتنبيه المهام")
+                putExtra(
+                    EXTRA_NOTES,
+                    "إذا ظهرت هذه الشاشة مع الصوت والاهتزاز فمحرك التنبيه يعمل بنجاح."
+                )
+            }
+        )
     }
 
     fun cancelTask(context: Context, taskId: String) {
         val alarmManager = alarmManager(context)
         listOf(KIND_TASK, KIND_SNOOZE).forEach { kind ->
-            alarmManager.cancel(alarmPendingIntent(
-                context = context,
-                requestCode = requestCode(taskId, kind),
-                kind = kind,
-                taskId = taskId,
-                title = "",
-                notes = "",
-                forceActivity = true
-            ))
+            alarmManager.cancel(
+                alarmPendingIntent(
+                    context = context,
+                    requestCode = requestCode(taskId, kind),
+                    kind = kind,
+                    taskId = taskId,
+                    title = "",
+                    notes = ""
+                )
+            )
         }
         AppLog.write(context, "TASK_ALARM_CANCELLED", "task=$taskId")
     }
@@ -114,8 +119,7 @@ object AlarmScheduler {
             .forEach { original ->
                 var task = original
                 if (task.dueAtMillis <= now && task.lastNotifiedAtMillis >= task.dueAtMillis) {
-                    val next = TaskRepository.nextOccurrence(task)
-                    if (next == null) return@forEach
+                    val next = TaskRepository.nextOccurrence(task) ?: return@forEach
                     task = task.copy(dueAtMillis = next, lastNotifiedAtMillis = 0L)
                     TaskRepository.save(context, task)
                 } else if (task.dueAtMillis <= now && task.lastNotifiedAtMillis == 0L) {
@@ -152,14 +156,19 @@ object AlarmScheduler {
         kind: String,
         taskId: String,
         title: String,
-        notes: String,
-        forceActivity: Boolean
+        notes: String
     ): ScheduleResult {
         val alarmManager = alarmManager(context)
         val operation = alarmPendingIntent(
-            context, requestCode, kind, taskId, title, notes, forceActivity
+            context = context,
+            requestCode = requestCode,
+            kind = kind,
+            taskId = taskId,
+            title = title,
+            notes = notes
         )
-        val exactAllowed = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarmManager.canScheduleExactAlarms()
+        val exactAllowed = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+            alarmManager.canScheduleExactAlarms()
         val safeTrigger = triggerAtMillis.coerceAtLeast(System.currentTimeMillis() + 1_000L)
 
         AppLog.write(
@@ -179,22 +188,46 @@ object AlarmScheduler {
                     },
                     pendingIntentFlags()
                 )
-                alarmManager.setAlarmClock(AlarmManager.AlarmClockInfo(safeTrigger, showIntent), operation)
+                alarmManager.setAlarmClock(
+                    AlarmManager.AlarmClockInfo(safeTrigger, showIntent),
+                    operation
+                )
             } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, safeTrigger, operation)
+                alarmManager.setAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    safeTrigger,
+                    operation
+                )
             } else {
                 alarmManager.setExact(AlarmManager.RTC_WAKEUP, safeTrigger, operation)
             }
-            AppLog.write(context, "ALARM_REGISTERED", "kind=$kind task=$taskId exact=$exactAllowed")
+            AppLog.write(
+                context,
+                "ALARM_REGISTERED",
+                "kind=$kind task=$taskId exact=$exactAllowed"
+            )
             ScheduleResult(
                 success = true,
                 exact = exactAllowed,
                 triggerAtMillis = safeTrigger,
-                message = if (exactAllowed) "تم تثبيت التنبيه بدقة" else "تم تثبيت التنبيه، وقد يتأخر قليلًا بسبب إعدادات النظام"
+                message = if (exactAllowed) {
+                    "تم تثبيت التنبيه بدقة"
+                } else {
+                    "تم تثبيت التنبيه، وقد يتأخر قليلًا بسبب إعدادات النظام"
+                }
             )
         }.getOrElse { error ->
-            AppLog.write(context, "ALARM_SCHEDULE_FAILED", "${error.javaClass.simpleName}: ${error.message}")
-            ScheduleResult(false, false, safeTrigger, "فشل تثبيت التنبيه: ${error.message}")
+            AppLog.write(
+                context,
+                "ALARM_SCHEDULE_FAILED",
+                "${error.javaClass.simpleName}: ${error.message}"
+            )
+            ScheduleResult(
+                success = false,
+                exact = false,
+                triggerAtMillis = safeTrigger,
+                message = "فشل تثبيت التنبيه: ${error.message}"
+            )
         }
     }
 
@@ -204,29 +237,30 @@ object AlarmScheduler {
         kind: String,
         taskId: String,
         title: String,
-        notes: String,
-        forceActivity: Boolean
+        notes: String
     ): PendingIntent = PendingIntent.getBroadcast(
         context,
         requestCode,
         Intent(context, AlarmReceiver::class.java).apply {
             action = ACTION_FIRE
-            data = Uri.parse("smarttasks://alarm/$kind/${taskId.ifBlank { requestCode.toString() }}")
+            data = Uri.parse(
+                "smarttasks://alarm/$kind/${taskId.ifBlank { requestCode.toString() }}"
+            )
             putExtra(EXTRA_KIND, kind)
             putExtra(EXTRA_TASK_ID, taskId)
-            putExtra(EXTRA_TITLE, title)
-            putExtra(EXTRA_NOTES, notes)
-            putExtra(EXTRA_FORCE_ACTIVITY, forceActivity)
+            putExtra(EXTRA_TITLE, NumberFormatUtils.latinDigits(title))
+            putExtra(EXTRA_NOTES, NumberFormatUtils.latinDigits(notes))
         },
         pendingIntentFlags()
     )
 
     private fun requestCode(id: String, kind: String): Int =
-        ("$kind:$id".hashCode().absoluteValue % 900_000) + 2_000
+        2_000 + (("$kind:$id".hashCode().toLong() and 0x7FFFFFFFL) % 900_000L).toInt()
 
     private fun alarmManager(context: Context): AlarmManager =
         context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
-    private fun pendingIntentFlags(): Int = PendingIntent.FLAG_UPDATE_CURRENT or
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
+    private fun pendingIntentFlags(): Int =
+        PendingIntent.FLAG_UPDATE_CURRENT or
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
 }
