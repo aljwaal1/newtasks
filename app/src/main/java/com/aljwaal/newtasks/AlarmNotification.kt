@@ -1,16 +1,19 @@
 package com.aljwaal.newtasks
 
+import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Color
 import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 
 object AlarmNotification {
     const val CHANNEL_ID = "smart_tasks_urgent_alarm_v2"
@@ -73,17 +76,38 @@ object AlarmNotification {
             .addAction(
                 R.drawable.ic_alarm,
                 "تم الإنجاز",
-                actionPendingIntent(context, AlarmActionReceiver.ACTION_DONE, taskId, title, notes, 3_201)
+                actionPendingIntent(
+                    context,
+                    AlarmActionReceiver.ACTION_DONE,
+                    taskId,
+                    title,
+                    notes,
+                    3_201
+                )
             )
             .addAction(
                 R.drawable.ic_alarm,
                 "تأجيل 5 دقائق",
-                actionPendingIntent(context, AlarmActionReceiver.ACTION_SNOOZE_5, taskId, title, notes, 3_202)
+                actionPendingIntent(
+                    context,
+                    AlarmActionReceiver.ACTION_SNOOZE_5,
+                    taskId,
+                    title,
+                    notes,
+                    3_202
+                )
             )
             .addAction(
                 R.drawable.ic_alarm,
                 "تأجيل 10 دقائق",
-                actionPendingIntent(context, AlarmActionReceiver.ACTION_SNOOZE_10, taskId, title, notes, 3_203)
+                actionPendingIntent(
+                    context,
+                    AlarmActionReceiver.ACTION_SNOOZE_10,
+                    taskId,
+                    title,
+                    notes,
+                    3_203
+                )
             )
             .build()
     }
@@ -94,20 +118,38 @@ object AlarmNotification {
         title: String,
         notes: String,
         kind: String
-    ): Boolean = runCatching {
-        NotificationManagerCompat.from(context).notify(
-            NOTIFICATION_ID,
-            build(context, taskId, title, notes, kind)
-        )
-        AppLog.write(context, "NOTIFICATION_POSTED_DIRECTLY", "kind=$kind task=$taskId")
-        true
-    }.getOrElse { error ->
-        AppLog.write(
-            context,
-            "NOTIFICATION_POST_FAILED",
-            "${error.javaClass.simpleName}: ${error.message}"
-        )
-        false
+    ): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            AppLog.write(context, "NOTIFICATION_POST_SKIPPED", "permission=false")
+            return false
+        }
+
+        val manager = NotificationManagerCompat.from(context)
+        if (!manager.areNotificationsEnabled()) {
+            AppLog.write(context, "NOTIFICATION_POST_SKIPPED", "notificationsDisabled=true")
+            return false
+        }
+
+        return runCatching {
+            manager.notify(
+                NOTIFICATION_ID,
+                build(context, taskId, title, notes, kind)
+            )
+            AppLog.write(context, "NOTIFICATION_POSTED_DIRECTLY", "kind=$kind task=$taskId")
+            true
+        }.getOrElse { error ->
+            AppLog.write(
+                context,
+                "NOTIFICATION_POST_FAILED",
+                "${error.javaClass.simpleName}: ${error.message}"
+            )
+            false
+        }
     }
 
     fun cancel(context: Context) {
