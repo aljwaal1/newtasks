@@ -21,40 +21,24 @@ data class PermissionSnapshot(
 object PermissionInspector {
     fun snapshot(context: Context): PermissionSnapshot {
         val notificationPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
-                PackageManager.PERMISSION_GRANTED
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
         } else true
-
-        val notifications = notificationPermission &&
-            NotificationManagerCompat.from(context).areNotificationsEnabled()
+        val notifications = notificationPermission && NotificationManagerCompat.from(context).areNotificationsEnabled()
 
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val exactAlarms = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
-            alarmManager.canScheduleExactAlarms()
+        val exactAlarms = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarmManager.canScheduleExactAlarms()
 
-        val notificationManager =
-            context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        val fullScreen = Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE ||
-            notificationManager.canUseFullScreenIntent()
-
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val fullScreen = Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE || notificationManager.canUseFullScreenIntent()
         val alarmChannel = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            notificationManager.getNotificationChannel(AlarmNotification.CHANNEL_ID)?.importance !=
-                NotificationManager.IMPORTANCE_NONE
+            notificationManager.getNotificationChannel(AlarmNotification.CHANNEL_ID)?.importance != NotificationManager.IMPORTANCE_NONE
         } else true
 
+        val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
         val batteryUnrestricted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
             powerManager.isIgnoringBatteryOptimizations(context.packageName)
-        } else {
-            true
-        }
+        } else true
 
-        return PermissionSnapshot(
-            notifications = notifications,
-            exactAlarms = exactAlarms,
-            fullScreen = fullScreen,
-            alarmChannel = alarmChannel,
-            batteryUnrestricted = batteryUnrestricted
-        )
+        return PermissionSnapshot(notifications, exactAlarms, fullScreen, alarmChannel, batteryUnrestricted)
     }
 }

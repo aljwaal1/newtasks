@@ -1,9 +1,9 @@
 package com.aljwaal.newtasks
 
-import android.app.KeyguardManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.IBinder
 import androidx.core.content.ContextCompat
 
@@ -14,48 +14,33 @@ class AlarmService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val title = intent?.getStringExtra(AlarmScheduler.EXTRA_TITLE)
-            ?: "حان موعد المهمة"
-        val kind = intent?.getStringExtra(AlarmScheduler.EXTRA_KIND)
-            ?: AlarmScheduler.KIND_TEST
-        val forceActivity = intent?.getBooleanExtra(AlarmScheduler.EXTRA_FORCE_ACTIVITY, false) == true
+        val taskId = intent?.getStringExtra(AlarmScheduler.EXTRA_TASK_ID).orEmpty()
+        val title = intent?.getStringExtra(AlarmScheduler.EXTRA_TITLE) ?: "حان موعد المهمة"
+        val notes = intent?.getStringExtra(AlarmScheduler.EXTRA_NOTES).orEmpty()
+        val kind = intent?.getStringExtra(AlarmScheduler.EXTRA_KIND) ?: AlarmScheduler.KIND_TEST
 
-        AppLog.write(
-            this,
-            "ALARM_SERVICE_STARTED",
-            "kind=$kind forceActivity=$forceActivity"
+        AppLog.write(this, "ALARM_SERVICE_STARTED", "kind=$kind task=$taskId")
+        startForeground(
+            AlarmNotification.NOTIFICATION_ID,
+            AlarmNotification.build(this, taskId, title, notes, kind)
         )
-
-        val notification = AlarmNotification.build(this, title, kind)
-        startForeground(AlarmNotification.NOTIFICATION_ID, notification)
         AppLog.write(this, "NOTIFICATION_POSTED", "fullScreenIntent=true")
         AlarmPlayer.start(this)
 
-        val keyguard = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
-        if (forceActivity || keyguard.isKeyguardLocked) {
-            val activityIntent = Intent(this, AlarmActivity::class.java).apply {
-                putExtra(AlarmScheduler.EXTRA_TITLE, title)
-                putExtra(AlarmScheduler.EXTRA_KIND, kind)
-                addFlags(
-                    Intent.FLAG_ACTIVITY_NEW_TASK or
-                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                        Intent.FLAG_ACTIVITY_SINGLE_TOP
-                )
-            }
-            runCatching {
-                startActivity(activityIntent)
-                AppLog.write(this, "FULL_SCREEN_START_REQUESTED", "direct=true")
-            }.onFailure {
-                AppLog.write(
-                    this,
-                    "FULL_SCREEN_START_FAILED",
-                    "${it.javaClass.simpleName}: ${it.message}"
-                )
-            }
-        } else {
-            AppLog.write(this, "FULL_SCREEN_DELEGATED_TO_NOTIFICATION", "screenUnlocked=true")
+        val activityIntent = Intent(this, AlarmActivity::class.java).apply {
+            data = Uri.parse("smarttasks://ring/$kind/${taskId.ifBlank { "test" }}")
+            putExtra(AlarmScheduler.EXTRA_TASK_ID, taskId)
+            putExtra(AlarmScheduler.EXTRA_TITLE, title)
+            putExtra(AlarmScheduler.EXTRA_NOTES, notes)
+            putExtra(AlarmScheduler.EXTRA_KIND, kind)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         }
-
+        runCatching {
+            startActivity(activityIntent)
+            AppLog.write(this, "FULL_SCREEN_START_REQUESTED", "direct=true")
+        }.onFailure {
+            AppLog.write(this, "FULL_SCREEN_START_FAILED", "${it.javaClass.simpleName}: ${it.message}")
+        }
         return START_NOT_STICKY
     }
 
@@ -68,11 +53,12 @@ class AlarmService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     companion object {
-        fun start(context: Context, title: String, kind: String, forceActivity: Boolean) {
+        fun start(context: Context, taskId: String, title: String, notes: String, kind: String) {
             val intent = Intent(context, AlarmService::class.java).apply {
+                putExtra(AlarmScheduler.EXTRA_TASK_ID, taskId)
                 putExtra(AlarmScheduler.EXTRA_TITLE, title)
+                putExtra(AlarmScheduler.EXTRA_NOTES, notes)
                 putExtra(AlarmScheduler.EXTRA_KIND, kind)
-                putExtra(AlarmScheduler.EXTRA_FORCE_ACTIVITY, forceActivity)
             }
             ContextCompat.startForegroundService(context, intent)
         }

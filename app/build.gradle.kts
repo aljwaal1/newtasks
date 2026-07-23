@@ -14,8 +14,8 @@ android {
         applicationId = "com.aljwaal.newtasks"
         minSdk = 21
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.0.1"
+        versionCode = 3
+        versionName = "1.1.0"
     }
 
     buildTypes {
@@ -46,7 +46,6 @@ kotlin {
 }
 
 dependencies {
-    // آخر خط Compose مستقر قبل رفع الحد الأدنى العام إلى API 23.
     val composeBom = platform("androidx.compose:compose-bom:2024.09.03")
     implementation(composeBom)
     androidTestImplementation(composeBom)
