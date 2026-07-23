@@ -1,6 +1,7 @@
 package com.aljwaal.newtasks
 
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -58,14 +59,13 @@ class AlarmActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setShowWhenLocked(true)
-        setTurnScreenOn(true)
-        window.addFlags(
-            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
-                WindowManager.LayoutParams.FLAG_ALLOW_LOCK_WHILE_SCREEN_ON
-        )
+        configureLockScreenDisplay()
         readIntent(intent)
-        AppLog.write(this, "ALARM_ACTIVITY_OPENED", "kind=$alarmKind title=$alarmTitle")
+        AppLog.write(
+            this,
+            "ALARM_ACTIVITY_OPENED",
+            "kind=$alarmKind title=$alarmTitle sdk=${Build.VERSION.SDK_INT}"
+        )
 
         setContent {
             androidx.compose.runtime.CompositionLocalProvider(
@@ -85,7 +85,7 @@ class AlarmActivity : ComponentActivity() {
                         onDone = {
                             AppLog.write(this, "ALARM_DONE_FROM_SCREEN")
                             AlarmService.stop(this)
-                            finishAndRemoveTask()
+                            finishAlarmScreen()
                         },
                         onSnooze5 = { snooze(5) },
                         onSnooze10 = { snooze(10) },
@@ -106,6 +106,24 @@ class AlarmActivity : ComponentActivity() {
         AppLog.write(this, "ALARM_ACTIVITY_NEW_INTENT", "kind=$alarmKind title=$alarmTitle")
     }
 
+    private fun configureLockScreenDisplay() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+        } else {
+            @Suppress("DEPRECATION")
+            window.addFlags(
+                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
+                    WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
+            )
+        }
+        window.addFlags(
+            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
+                WindowManager.LayoutParams.FLAG_ALLOW_LOCK_WHILE_SCREEN_ON
+        )
+    }
+
     private fun readIntent(intent: Intent?) {
         alarmTitle = intent?.getStringExtra(AlarmScheduler.EXTRA_TITLE) ?: "حان موعد المهمة"
         alarmKind = intent?.getStringExtra(AlarmScheduler.EXTRA_KIND) ?: AlarmScheduler.KIND_TEST
@@ -115,7 +133,15 @@ class AlarmActivity : ComponentActivity() {
         val result = AlarmScheduler.scheduleSnooze(this, minutes)
         AppLog.write(this, "ALARM_SNOOZED_FROM_SCREEN", "minutes=$minutes success=${result.success}")
         AlarmService.stop(this)
-        finishAndRemoveTask()
+        finishAlarmScreen()
+    }
+
+    private fun finishAlarmScreen() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            finishAndRemoveTask()
+        } else {
+            finish()
+        }
     }
 }
 
