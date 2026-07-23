@@ -21,7 +21,7 @@ class AlarmReceiver : BroadcastReceiver() {
             AlarmScheduler.restoreDaily(context, reason = "daily alarm fired")
         }
 
-        val powerManager = context.getSystemService(PowerManager::class.java)
+        val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
         runCatching {
             powerManager.newWakeLock(
                 PowerManager.PARTIAL_WAKE_LOCK,
