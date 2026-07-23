@@ -43,6 +43,16 @@ class AlarmService : Service() {
         }
 
         if (!foregroundStarted) {
+            // حتى إذا منع النظام الخدمة، حاول إظهار واجهة المنبه والإشعار العادي.
+            AlarmNotification.post(this, taskId, title, notes, kind)
+            AlarmActivityLauncher.launch(
+                context = this,
+                requestCode = stableRequestCode("promotion-fallback:$kind:$taskId"),
+                taskId = taskId,
+                title = title,
+                notes = notes,
+                kind = kind
+            )
             stopSelf(startId)
             return START_NOT_STICKY
         }
