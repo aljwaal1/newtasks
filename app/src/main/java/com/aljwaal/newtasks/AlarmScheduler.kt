@@ -41,7 +41,7 @@ object AlarmScheduler {
             requestCode = REQUEST_DAILY,
             kind = KIND_DAILY,
             title = "موعد مراجعة المهام",
-            forceActivity = false
+            forceActivity = true
         )
         AppPreferences.saveLastTrigger(context, triggerAt)
         AppLog.write(
@@ -74,7 +74,7 @@ object AlarmScheduler {
             requestCode = REQUEST_TEST,
             kind = KIND_TEST,
             title = "اختبار تنبيه المهام",
-            forceActivity = false
+            forceActivity = true
         )
     }
 
@@ -86,7 +86,7 @@ object AlarmScheduler {
             requestCode = REQUEST_SNOOZE,
             kind = KIND_SNOOZE,
             title = "تذكير مؤجل لمدة $minutes دقائق",
-            forceActivity = false
+            forceActivity = true
         )
         AppLog.write(context, "SNOOZE_SCHEDULED", "minutes=$minutes trigger=${format(triggerAt)}")
         return result
@@ -105,7 +105,7 @@ object AlarmScheduler {
 
     fun cancelDaily(context: Context) {
         val alarmManager = alarmManager(context)
-        alarmManager.cancel(alarmPendingIntent(context, REQUEST_DAILY, KIND_DAILY, "", false))
+        alarmManager.cancel(alarmPendingIntent(context, REQUEST_DAILY, KIND_DAILY, "", true))
         AppPreferences.disableDaily(context)
         AppLog.write(context, "DAILY_ALARM_CANCELLED")
     }
@@ -126,7 +126,7 @@ object AlarmScheduler {
         AppLog.write(
             context,
             "ALARM_SCHEDULE_REQUEST",
-            "kind=$kind trigger=${format(triggerAtMillis)} exactPermission=$exactAllowed sdk=${Build.VERSION.SDK_INT}"
+            "kind=$kind trigger=${format(triggerAtMillis)} exactPermission=$exactAllowed sdk=${Build.VERSION.SDK_INT} forceActivity=$forceActivity"
         )
 
         return runCatching {
