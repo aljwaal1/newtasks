@@ -45,35 +45,31 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class AlarmActivity : ComponentActivity() {
     private var taskId by mutableStateOf("")
     private var alarmTitle by mutableStateOf("حان موعد المهمة")
     private var alarmNotes by mutableStateOf("")
+    private var alarmKind = AlarmScheduler.KIND_TEST
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-            setShowWhenLocked(true)
-            setTurnScreenOn(true)
-        } else {
-            @Suppress("DEPRECATION")
-            window.addFlags(
-                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                    WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD or
-                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
-            )
-        }
-        window.addFlags(
-            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
-                WindowManager.LayoutParams.FLAG_ALLOW_LOCK_WHILE_SCREEN_ON
-        )
+        configureAlarmWindow()
         readIntent(intent)
+        ensureAlarmService()
         AppLog.write(this, "ALARM_ACTIVITY_OPENED", "task=$taskId title=$alarmTitle")
 
         setContent {
-            androidx.compose.runtime.CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+            androidx.compose.runtime.CompositionLocalProvider(
+                LocalLayoutDirection provides LayoutDirection.Rtl
+            ) {
                 MaterialTheme(
                     colorScheme = lightColorScheme(
                         primary = Color(0xFF4F46E5),
@@ -100,34 +96,109 @@ class AlarmActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         readIntent(intent)
+        ensureAlarmService()
+        AppLog.write(this, "ALARM_ACTIVITY_NEW_INTENT", "task=$taskId title=$alarmTitle")
+    }
+
+    private fun configureAlarmWindow() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+        } else {
+            @Suppress("DEPRECATION")
+            window.addFlags(
+                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                    WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD or
+                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+            )
+        }
+        window.addFlags(
+            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
+                WindowManager.LayoutParams.FLAG_ALLOW_LOCK_WHILE_SCREEN_ON
+        )
     }
 
     private fun readIntent(intent: Intent?) {
         taskId = intent?.getStringExtra(AlarmScheduler.EXTRA_TASK_ID).orEmpty()
-        alarmTitle = intent?.getStringExtra(AlarmScheduler.EXTRA_TITLE) ?: "حان موعد المهمة"
-        alarmNotes = intent?.getStringExtra(AlarmScheduler.EXTRA_NOTES).orEmpty()
+        alarmTitle = NumberFormatUtils.latinDigits(
+            intent?.getStringExtra(AlarmScheduler.EXTRA_TITLE) ?: "حان موعد المهمة"
+        )
+        alarmNotes = NumberFormatUtils.latinDigits(
+            intent?.getStringExtra(AlarmScheduler.EXTRA_NOTES).orEmpty()
+        )
+        alarmKind = intent?.getStringExtra(AlarmScheduler.EXTRA_KIND)
+            ?: AlarmScheduler.KIND_TEST
+    }
+
+    private fun ensureAlarmService() {
+        runCatching {
+            AlarmService.start(
+                context = this,
+                taskId = taskId,
+                title = alarmTitle,
+                notes = alarmNotes,
+                kind = alarmKind,
+                launchScreen = false
+            )
+        }.onFailure { error ->
+            AppLog.write(
+                this,
+                "ALARM_ACTIVITY_SERVICE_START_FAILED",
+                "${error.javaClass.simpleName}: ${error.message}"
+            )
+        }
     }
 
     private fun complete() {
-        if (taskId.isNotBlank()) {
-            val task = TaskRepository.get(this, taskId)
-            if (task?.repeatRule == RepeatRule.NONE) {
-                TaskRepository.markCompleted(this, taskId, true)
-                AlarmScheduler.cancelTask(this, taskId)
-            } else {
-                AppLog.write(this, "REPEATING_OCCURRENCE_COMPLETED", "task=$taskId next=${task?.dueAtMillis}")
-            }
-        }
-        AppLog.write(this, "ALARM_DONE_FROM_SCREEN", "task=$taskId")
+        val currentTaskId = taskId
         AlarmService.stop(this)
-        finishAndRemoveTask()
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) {
+                if (currentTaskId.isNotBlank()) {
+                    val task = TaskRepository.get(this@AlarmActivity, currentTaskId)
+                    if (task?.repeatRule == RepeatRule.NONE) {
+                        TaskRepository.markCompleted(this@AlarmActivity, currentTaskId, true)
+                        AlarmScheduler.cancelTask(this@AlarmActivity, currentTaskId)
+                    } else {
+                        AppLog.write(
+                            this@AlarmActivity,
+                            "REPEATING_OCCURRENCE_COMPLETED",
+                            "task=$currentTaskId next=${task?.dueAtMillis}"
+                        )
+                    }
+                }
+                AppLog.write(
+                    this@AlarmActivity,
+                    "ALARM_DONE_FROM_SCREEN",
+                    "task=$currentTaskId"
+                )
+            }
+            finishAndRemoveTask()
+        }
     }
 
     private fun snooze(minutes: Int) {
-        AlarmScheduler.scheduleSnooze(this, taskId, alarmTitle, alarmNotes, minutes)
-        AppLog.write(this, "ALARM_SNOOZED_FROM_SCREEN", "task=$taskId minutes=$minutes")
+        val currentTaskId = taskId
+        val currentTitle = alarmTitle
+        val currentNotes = alarmNotes
         AlarmService.stop(this)
-        finishAndRemoveTask()
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) {
+                AlarmScheduler.scheduleSnooze(
+                    this@AlarmActivity,
+                    currentTaskId,
+                    currentTitle,
+                    currentNotes,
+                    minutes
+                )
+                AppLog.write(
+                    this@AlarmActivity,
+                    "ALARM_SNOOZED_FROM_SCREEN",
+                    "task=$currentTaskId minutes=$minutes"
+                )
+            }
+            finishAndRemoveTask()
+        }
     }
 }
 
@@ -143,7 +214,7 @@ private fun AlarmScreen(
     BackHandler(enabled = true) { }
     var now by mutableStateOf(System.currentTimeMillis())
     LaunchedEffect(Unit) {
-        while (true) {
+        while (currentCoroutineContext().isActive) {
             now = System.currentTimeMillis()
             delay(1_000)
         }
@@ -160,7 +231,9 @@ private fun AlarmScreen(
                 verticalArrangement = Arrangement.Center
             ) {
                 Box(
-                    modifier = Modifier.background(Color(0xFFE0E7FF), RoundedCornerShape(30.dp)).padding(24.dp),
+                    modifier = Modifier
+                        .background(Color(0xFFE0E7FF), RoundedCornerShape(30.dp))
+                        .padding(24.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(Icons.Default.Alarm, null, tint = Color(0xFF4338CA))
@@ -176,7 +249,10 @@ private fun AlarmScreen(
                 Text(NumberFormatUtils.formatWeekdayDate(now), color = Color(0xFF64748B))
                 Spacer(Modifier.height(20.dp))
                 Column(
-                    modifier = Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(24.dp)).padding(22.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color.White, RoundedCornerShape(24.dp))
+                        .padding(22.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
@@ -189,7 +265,12 @@ private fun AlarmScreen(
                     )
                     if (notes.isNotBlank()) {
                         Spacer(Modifier.height(10.dp))
-                        Text(notes, textAlign = TextAlign.Center, color = Color(0xFF64748B), lineHeight = 24.sp)
+                        Text(
+                            notes,
+                            textAlign = TextAlign.Center,
+                            color = Color(0xFF64748B),
+                            lineHeight = 24.sp
+                        )
                     }
                 }
                 Spacer(Modifier.height(22.dp))
@@ -203,18 +284,33 @@ private fun AlarmScreen(
                     Text("  تم الإنجاز", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 }
                 Spacer(Modifier.height(10.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    OutlinedButton(onClick = onSnooze5, modifier = Modifier.weight(1f).height(54.dp), shape = RoundedCornerShape(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onSnooze5,
+                        modifier = Modifier.weight(1f).height(54.dp),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
                         Icon(Icons.Default.Snooze, null)
                         Text("  5 دقائق")
                     }
-                    OutlinedButton(onClick = onSnooze10, modifier = Modifier.weight(1f).height(54.dp), shape = RoundedCornerShape(16.dp)) {
+                    OutlinedButton(
+                        onClick = onSnooze10,
+                        modifier = Modifier.weight(1f).height(54.dp),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
                         Icon(Icons.Default.Snooze, null)
                         Text("  10 دقائق")
                     }
                 }
                 Spacer(Modifier.height(8.dp))
-                OutlinedButton(onClick = onStopSound, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
+                OutlinedButton(
+                    onClick = onStopSound,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
                     Icon(Icons.Default.VolumeOff, null)
                     Text("  إيقاف الصوت فقط")
                 }
