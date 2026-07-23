@@ -18,8 +18,27 @@ jobs:
         with:
           gradle-version: '8.13'
       - name: Build debug APK
-        run: gradle :app:assembleDebug --stacktrace
+        shell: bash
+        run: |
+          set +e
+          gradle :app:assembleDebug --stacktrace --console=plain > gradle-build.log 2>&1
+          status=$?
+          if [ "$status" -ne 0 ]; then
+            echo "===== GRADLE BUILD FAILURE — LAST 180 LINES ====="
+            tail -n 180 gradle-build.log
+            exit "$status"
+          fi
+          echo "===== GRADLE BUILD SUCCESS — LAST 40 LINES ====="
+          tail -n 40 gradle-build.log
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smart-tasks-gradle-log
+          path: gradle-build.log
+          if-no-files-found: ignore
       - name: Upload APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: smart-tasks-alarm-debug
