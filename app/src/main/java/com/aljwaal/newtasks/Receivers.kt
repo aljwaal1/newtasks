@@ -7,50 +7,132 @@ import android.os.PowerManager
 
 class AlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        val kind = intent.getStringExtra(AlarmScheduler.EXTRA_KIND) ?: AlarmScheduler.KIND_TEST
-        val taskId = intent.getStringExtra(AlarmScheduler.EXTRA_TASK_ID).orEmpty()
-        val repositoryTask = taskId.takeIf { it.isNotBlank() }?.let { TaskRepository.get(context, it) }
-        val title = repositoryTask?.title ?: intent.getStringExtra(AlarmScheduler.EXTRA_TITLE) ?: "حان موعد المهمة"
-        val notes = repositoryTask?.notes ?: intent.getStringExtra(AlarmScheduler.EXTRA_NOTES).orEmpty()
+        val pendingResult = goAsync()
+        val appContext = context.applicationContext
+        val copiedIntent = Intent(intent)
 
-        AppLog.write(context, "ALARM_RECEIVED", "kind=$kind task=$taskId")
-        if (kind == AlarmScheduler.KIND_TASK) AlarmScheduler.onAlarmFired(context, taskId)
+        Thread({
+            var wakeLock: PowerManager.WakeLock? = null
+            try {
+                val kind = copiedIntent.getStringExtra(AlarmScheduler.EXTRA_KIND)
+                    ?: AlarmScheduler.KIND_TEST
+                val taskId = copiedIntent.getStringExtra(AlarmScheduler.EXTRA_TASK_ID).orEmpty()
 
-        val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
-        runCatching {
-            powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "SmartTasksAlarm:receiver").apply {
-                acquire(30_000L)
+                val powerManager = appContext.getSystemService(Context.POWER_SERVICE) as PowerManager
+                wakeLock = powerManager.newWakeLock(
+                    PowerManager.PARTIAL_WAKE_LOCK,
+                    "SmartTasksAlarm:receiver"
+                ).apply {
+                    setReferenceCounted(false)
+                    acquire(30_000L)
+                }
+                AppLog.write(appContext, "WAKE_LOCK_ACQUIRED", "timeout=30000")
+
+                val repositoryTask = taskId.takeIf { it.isNotBlank() }
+                    ?.let { TaskRepository.get(appContext, it) }
+                val title = repositoryTask?.title
+                    ?: copiedIntent.getStringExtra(AlarmScheduler.EXTRA_TITLE)
+                    ?: "حان موعد المهمة"
+                val notes = repositoryTask?.notes
+                    ?: copiedIntent.getStringExtra(AlarmScheduler.EXTRA_NOTES).orEmpty()
+
+                AppLog.write(appContext, "ALARM_RECEIVED", "kind=$kind task=$taskId")
+                if (kind == AlarmScheduler.KIND_TASK) {
+                    AlarmScheduler.onAlarmFired(appContext, taskId)
+                }
+
+                val serviceStarted = runCatching {
+                    AlarmService.start(appContext, taskId, title, notes, kind, launchScreen = true)
+                    true
+                }.getOrElse { error ->
+                    AppLog.write(
+                        appContext,
+                        "FOREGROUND_SERVICE_START_FAILED",
+                        "${error.javaClass.simpleName}: ${error.message}"
+                    )
+                    false
+                }
+
+                if (!serviceStarted) {
+                    AlarmNotification.post(appContext, taskId, title, notes, kind)
+                    AlarmActivityLauncher.launch(
+                        context = appContext,
+                        requestCode = stableRequestCode("receiver:$kind:$taskId"),
+                        taskId = taskId,
+                        title = title,
+                        notes = notes,
+                        kind = kind
+                    )
+                }
+            } catch (error: Throwable) {
+                AppLog.write(
+                    appContext,
+                    "ALARM_RECEIVER_FAILED",
+                    "${error.javaClass.simpleName}: ${error.message}"
+                )
+            } finally {
+                runCatching { if (wakeLock?.isHeld == true) wakeLock?.release() }
+                AppLog.write(appContext, "WAKE_LOCK_RELEASED")
+                pendingResult.finish()
             }
-            AppLog.write(context, "WAKE_LOCK_ACQUIRED", "timeout=30000")
-        }.onFailure { AppLog.write(context, "WAKE_LOCK_FAILED", it.message.orEmpty()) }
-
-        runCatching { AlarmService.start(context, taskId, title, notes, kind) }
-            .onFailure { AppLog.write(context, "FOREGROUND_SERVICE_START_FAILED", "${it.javaClass.simpleName}: ${it.message}") }
+        }, "SmartTasks-AlarmReceiver").start()
     }
 }
 
 class AlarmActionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        val taskId = intent.getStringExtra(AlarmScheduler.EXTRA_TASK_ID).orEmpty()
-        val title = intent.getStringExtra(AlarmScheduler.EXTRA_TITLE) ?: "حان موعد المهمة"
-        val notes = intent.getStringExtra(AlarmScheduler.EXTRA_NOTES).orEmpty()
-        AppLog.write(context, "ALARM_ACTION_RECEIVED", "action=${intent.action} task=$taskId")
-        when (intent.action) {
-            ACTION_DONE -> {
-                if (taskId.isNotBlank()) {
-                    val task = TaskRepository.get(context, taskId)
-                    if (task?.repeatRule == RepeatRule.NONE) {
-                        TaskRepository.markCompleted(context, taskId, true)
-                        AlarmScheduler.cancelTask(context, taskId)
-                    } else {
-                        AppLog.write(context, "REPEATING_OCCURRENCE_COMPLETED", "task=$taskId next=${task?.dueAtMillis}")
+        val pendingResult = goAsync()
+        val appContext = context.applicationContext
+        val copiedIntent = Intent(intent)
+
+        // أوقف الصوت فورًا، ثم نفّذ تحديث البيانات خارج خيط النظام الرئيسي.
+        AlarmService.stop(appContext)
+
+        Thread({
+            try {
+                val taskId = copiedIntent.getStringExtra(AlarmScheduler.EXTRA_TASK_ID).orEmpty()
+                val title = copiedIntent.getStringExtra(AlarmScheduler.EXTRA_TITLE)
+                    ?: "حان موعد المهمة"
+                val notes = copiedIntent.getStringExtra(AlarmScheduler.EXTRA_NOTES).orEmpty()
+                AppLog.write(
+                    appContext,
+                    "ALARM_ACTION_RECEIVED",
+                    "action=${copiedIntent.action} task=$taskId"
+                )
+
+                when (copiedIntent.action) {
+                    ACTION_DONE -> {
+                        if (taskId.isNotBlank()) {
+                            val task = TaskRepository.get(appContext, taskId)
+                            if (task?.repeatRule == RepeatRule.NONE) {
+                                TaskRepository.markCompleted(appContext, taskId, true)
+                                AlarmScheduler.cancelTask(appContext, taskId)
+                            } else {
+                                AppLog.write(
+                                    appContext,
+                                    "REPEATING_OCCURRENCE_COMPLETED",
+                                    "task=$taskId next=${task?.dueAtMillis}"
+                                )
+                            }
+                        }
                     }
+
+                    ACTION_SNOOZE_5 ->
+                        AlarmScheduler.scheduleSnooze(appContext, taskId, title, notes, 5)
+
+                    ACTION_SNOOZE_10 ->
+                        AlarmScheduler.scheduleSnooze(appContext, taskId, title, notes, 10)
                 }
+            } catch (error: Throwable) {
+                AppLog.write(
+                    appContext,
+                    "ALARM_ACTION_FAILED",
+                    "${error.javaClass.simpleName}: ${error.message}"
+                )
+            } finally {
+                pendingResult.finish()
             }
-            ACTION_SNOOZE_5 -> AlarmScheduler.scheduleSnooze(context, taskId, title, notes, 5)
-            ACTION_SNOOZE_10 -> AlarmScheduler.scheduleSnooze(context, taskId, title, notes, 10)
-        }
-        AlarmService.stop(context)
+        }, "SmartTasks-AlarmAction").start()
     }
 
     companion object {
@@ -62,8 +144,27 @@ class AlarmActionReceiver : BroadcastReceiver() {
 
 class SystemEventReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        AppLog.write(context, "SYSTEM_EVENT_RECEIVED", "action=${intent.action}")
-        AlarmNotification.ensureChannel(context)
-        AlarmScheduler.restoreAll(context, intent.action ?: "unknown")
+        val pendingResult = goAsync()
+        val appContext = context.applicationContext
+        val action = intent.action ?: "unknown"
+
+        Thread({
+            try {
+                AppLog.write(appContext, "SYSTEM_EVENT_RECEIVED", "action=$action")
+                AlarmNotification.ensureChannel(appContext)
+                AlarmScheduler.restoreAll(appContext, action)
+            } catch (error: Throwable) {
+                AppLog.write(
+                    appContext,
+                    "SYSTEM_EVENT_RESTORE_FAILED",
+                    "${error.javaClass.simpleName}: ${error.message}"
+                )
+            } finally {
+                pendingResult.finish()
+            }
+        }, "SmartTasks-SystemRestore").start()
     }
 }
+
+private fun stableRequestCode(value: String): Int =
+    100_000 + (value.hashCode().toLong() and 0x7FFFFFFFL).rem(800_000L).toInt()
