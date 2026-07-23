@@ -31,7 +31,7 @@ class AlarmService : Service() {
         AppLog.write(this, "NOTIFICATION_POSTED", "fullScreenIntent=true")
         AlarmPlayer.start(this)
 
-        val keyguard = getSystemService(KeyguardManager::class.java)
+        val keyguard = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
         if (forceActivity || keyguard.isKeyguardLocked) {
             val activityIntent = Intent(this, AlarmActivity::class.java).apply {
                 putExtra(AlarmScheduler.EXTRA_TITLE, title)
