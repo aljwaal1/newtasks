@@ -104,7 +104,7 @@ object AlarmScheduler {
     }
 
     fun cancelDaily(context: Context) {
-        val alarmManager = context.getSystemService(AlarmManager::class.java)
+        val alarmManager = alarmManager(context)
         alarmManager.cancel(alarmPendingIntent(context, REQUEST_DAILY, KIND_DAILY, "", false))
         AppPreferences.disableDaily(context)
         AppLog.write(context, "DAILY_ALARM_CANCELLED")
@@ -118,7 +118,7 @@ object AlarmScheduler {
         title: String,
         forceActivity: Boolean
     ): ScheduleResult {
-        val alarmManager = context.getSystemService(AlarmManager::class.java)
+        val alarmManager = alarmManager(context)
         val operation = alarmPendingIntent(context, requestCode, kind, title, forceActivity)
         val exactAllowed = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
             alarmManager.canScheduleExactAlarms()
@@ -126,7 +126,7 @@ object AlarmScheduler {
         AppLog.write(
             context,
             "ALARM_SCHEDULE_REQUEST",
-            "kind=$kind trigger=${format(triggerAtMillis)} exactPermission=$exactAllowed"
+            "kind=$kind trigger=${format(triggerAtMillis)} exactPermission=$exactAllowed sdk=${Build.VERSION.SDK_INT}"
         )
 
         return runCatching {
@@ -137,20 +137,23 @@ object AlarmScheduler {
                     Intent(context, MainActivity::class.java).addFlags(
                         Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
                     ),
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    pendingIntentFlags()
                 )
                 alarmManager.setAlarmClock(
                     AlarmManager.AlarmClockInfo(triggerAtMillis, showIntent),
                     operation
                 )
                 AppLog.write(context, "EXACT_ALARM_REGISTERED", "kind=$kind")
-            } else {
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 alarmManager.setAndAllowWhileIdle(
                     AlarmManager.RTC_WAKEUP,
                     triggerAtMillis,
                     operation
                 )
-                AppLog.write(context, "INEXACT_FALLBACK_REGISTERED", "kind=$kind")
+                AppLog.write(context, "INEXACT_FALLBACK_REGISTERED", "kind=$kind mode=idle")
+            } else {
+                alarmManager.set(AlarmManager.RTC_WAKEUP, triggerAtMillis, operation)
+                AppLog.write(context, "INEXACT_FALLBACK_REGISTERED", "kind=$kind mode=legacy")
             }
             ScheduleResult(
                 success = true,
@@ -185,9 +188,16 @@ object AlarmScheduler {
             context,
             requestCode,
             intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            pendingIntentFlags()
         )
     }
+
+    private fun alarmManager(context: Context): AlarmManager =
+        context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+
+    private fun pendingIntentFlags(): Int =
+        PendingIntent.FLAG_UPDATE_CURRENT or
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
 
     private fun nextDailyTrigger(hour: Int, minute: Int): Long {
         val now = Calendar.getInstance()
