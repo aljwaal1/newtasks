@@ -17,19 +17,19 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.13'
-      - name: Build debug APK
+      - name: Lint and build debug APK
         shell: bash
         run: |
           set +e
-          gradle :app:assembleDebug --stacktrace --console=plain > gradle-build.log 2>&1
+          gradle :app:lintDebug :app:assembleDebug --stacktrace --console=plain > gradle-build.log 2>&1
           status=$?
           if [ "$status" -ne 0 ]; then
-            echo "===== GRADLE BUILD FAILURE — LAST 180 LINES ====="
-            tail -n 180 gradle-build.log
+            echo "===== ANDROID CHECK FAILURE — LAST 220 LINES ====="
+            tail -n 220 gradle-build.log
             exit "$status"
           fi
-          echo "===== GRADLE BUILD SUCCESS — LAST 40 LINES ====="
-          tail -n 40 gradle-build.log
+          echo "===== ANDROID CHECK SUCCESS — LAST 60 LINES ====="
+          tail -n 60 gradle-build.log
       - name: Upload build log
         if: always()
         uses: actions/upload-artifact@v4
@@ -37,9 +37,16 @@ jobs:
           name: smart-tasks-gradle-log
           path: gradle-build.log
           if-no-files-found: ignore
+      - name: Upload lint report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smart-tasks-lint-report
+          path: app/build/reports/lint-results-debug.html
+          if-no-files-found: ignore
       - name: Upload APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: smart-tasks-alarm-debug
+          name: smart-tasks-android-5-plus-v1.1.1
           path: app/build/outputs/apk/debug/app-debug.apk
