@@ -19,7 +19,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.core.content.FileProvider
+import androidx.lifecycle.lifecycleScope
 import java.io.File
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
     private var refreshTick by mutableIntStateOf(0)
@@ -35,28 +39,49 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.OpenDocument()
     ) { uri ->
         if (uri == null) return@registerForActivityResult
-        runCatching {
-            val text = contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
-                ?: error("تعذر قراءة الملف")
-            TaskRepository.importJson(this, text).getOrThrow()
-        }.onSuccess { count ->
-            AlarmScheduler.restoreAll(this, "backup import")
-            Toast.makeText(this, "تم استيراد ${count} مهمة", Toast.LENGTH_LONG).show()
-            refreshTick++
-        }.onFailure {
-            AppLog.write(this, "BACKUP_IMPORT_FAILED", it.message.orEmpty())
-            Toast.makeText(this, "فشل الاستيراد: ${it.message}", Toast.LENGTH_LONG).show()
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    val text = contentResolver.openInputStream(uri)
+                        ?.bufferedReader(Charsets.UTF_8)
+                        ?.use { it.readText() }
+                        ?: error("تعذر قراءة الملف")
+                    val count = TaskRepository.importJson(this@MainActivity, text).getOrThrow()
+                    AlarmScheduler.restoreAll(this@MainActivity, "backup import")
+                    count
+                }
+            }
+            result.onSuccess { count ->
+                Toast.makeText(
+                    this@MainActivity,
+                    "تم استيراد ${NumberFormatUtils.number(count)} مهمة",
+                    Toast.LENGTH_LONG
+                ).show()
+                refreshTick++
+            }.onFailure { error ->
+                AppLog.write(this@MainActivity, "BACKUP_IMPORT_FAILED", error.message.orEmpty())
+                Toast.makeText(
+                    this@MainActivity,
+                    "فشل الاستيراد: ${error.message}",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         AlarmNotification.ensureChannel(this)
-        AlarmScheduler.restoreAll(this, "app opened")
-        AppLog.write(this, "MAIN_ACTIVITY_CREATED", "sdk=${Build.VERSION.SDK_INT} version=${BuildConfig.VERSION_NAME}")
+        AppLog.write(
+            this,
+            "MAIN_ACTIVITY_CREATED",
+            "sdk=${Build.VERSION.SDK_INT} version=${BuildConfig.VERSION_NAME}"
+        )
 
         setContent {
-            androidx.compose.runtime.CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+            androidx.compose.runtime.CompositionLocalProvider(
+                LocalLayoutDirection provides LayoutDirection.Rtl
+            ) {
                 MaterialTheme(
                     colorScheme = lightColorScheme(
                         primary = Color(0xFF4F46E5),
@@ -84,18 +109,29 @@ class MainActivity : ComponentActivity() {
                             Toast.makeText(this, result.message, Toast.LENGTH_LONG).show()
                         },
                         onShareBackup = ::shareBackup,
-                        onImportBackup = { importLauncher.launch(arrayOf("application/json", "text/plain", "*/*")) },
+                        onImportBackup = {
+                            importLauncher.launch(arrayOf("application/json", "text/plain", "*/*"))
+                        },
                         onCreateLocalBackup = ::createLocalBackup,
                         onRestoreLocalBackup = ::restoreLocalBackup,
                         onShareLog = ::shareLog,
                         onClearLog = {
-                            AppLog.clear(this)
-                            AppLog.write(this, "LOG_CLEARED")
+                            lifecycleScope.launch(Dispatchers.IO) {
+                                AppLog.clear(this@MainActivity)
+                                AppLog.write(this@MainActivity, "LOG_CLEARED")
+                            }
                             refreshTick++
                         }
                     )
                 }
             }
+        }
+
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) {
+                AlarmScheduler.restoreAll(this@MainActivity, "app opened")
+            }
+            refreshTick++
         }
     }
 
@@ -106,42 +142,85 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun saveTask(task: TaskItem) {
-        TaskRepository.save(this, task)
-        val result = AlarmScheduler.scheduleTask(this, task)
-        Toast.makeText(this, result.message, Toast.LENGTH_SHORT).show()
-        refreshTick++
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    TaskRepository.save(this@MainActivity, task)
+                    AlarmScheduler.scheduleTask(this@MainActivity, task)
+                }
+            }
+            result.onSuccess { scheduleResult ->
+                Toast.makeText(this@MainActivity, scheduleResult.message, Toast.LENGTH_SHORT).show()
+                refreshTick++
+            }.onFailure { error ->
+                AppLog.write(this@MainActivity, "TASK_SAVE_FAILED", error.message.orEmpty())
+                Toast.makeText(
+                    this@MainActivity,
+                    "تعذر حفظ المهمة: ${error.message}",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
     }
 
     private fun deleteTask(task: TaskItem) {
-        AlarmScheduler.cancelTask(this, task.id)
-        TaskRepository.delete(this, task.id)
-        refreshTick++
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) {
+                AlarmScheduler.cancelTask(this@MainActivity, task.id)
+                TaskRepository.delete(this@MainActivity, task.id)
+            }
+            refreshTick++
+        }
     }
 
     private fun toggleTask(task: TaskItem) {
-        val completed = task.status != TaskStatus.COMPLETED
-        val updated = TaskRepository.markCompleted(this, task.id, completed) ?: return
-        if (completed) AlarmScheduler.cancelTask(this, task.id) else AlarmScheduler.scheduleTask(this, updated)
-        refreshTick++
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) {
+                val completed = task.status != TaskStatus.COMPLETED
+                val updated = TaskRepository.markCompleted(
+                    this@MainActivity,
+                    task.id,
+                    completed
+                ) ?: return@withContext
+                if (completed) {
+                    AlarmScheduler.cancelTask(this@MainActivity, task.id)
+                } else {
+                    AlarmScheduler.scheduleTask(this@MainActivity, updated)
+                }
+            }
+            refreshTick++
+        }
     }
 
     private fun requestNotificationPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-        } else openNotificationSettings()
+        } else {
+            openNotificationSettings()
+        }
     }
 
     private fun openExactAlarmSettings() {
         val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:$packageName"))
-        } else Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))
+            Intent(
+                Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+                Uri.parse("package:$packageName")
+            )
+        } else {
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))
+        }
         launchSettings(intent, "EXACT_ALARM_SETTINGS_OPENED")
     }
 
     private fun openFullScreenSettings() {
         val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, Uri.parse("package:$packageName"))
-        } else Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))
+            Intent(
+                Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT,
+                Uri.parse("package:$packageName")
+            )
+        } else {
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))
+        }
         launchSettings(intent, "FULL_SCREEN_SETTINGS_OPENED")
     }
 
@@ -153,56 +232,105 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun openBatterySettings() {
-        launchSettings(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS), "BATTERY_SETTINGS_OPENED")
+        launchSettings(
+            Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS),
+            "BATTERY_SETTINGS_OPENED"
+        )
     }
 
     private fun launchSettings(intent: Intent, event: String) {
         runCatching { startActivity(intent) }
             .onSuccess { AppLog.write(this, event) }
-            .onFailure {
-                startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
-                AppLog.write(this, "SETTINGS_FALLBACK_OPENED", it.message.orEmpty())
+            .onFailure { error ->
+                runCatching {
+                    startActivity(
+                        Intent(
+                            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                            Uri.parse("package:$packageName")
+                        )
+                    )
+                }
+                AppLog.write(this, "SETTINGS_FALLBACK_OPENED", error.message.orEmpty())
             }
     }
 
     private fun shareBackup() {
-        runCatching {
-            val directory = File(filesDir, "backups").apply { mkdirs() }
-            val file = File(directory, "SmartTasks-Backup.json")
-            file.writeText(TaskRepository.exportJson(this), Charsets.UTF_8)
-            shareFile(file, "application/json", "نسخة احتياطية لمهامي")
-            AppLog.write(this, "BACKUP_SHARE_OPENED")
-        }.onFailure { Toast.makeText(this, "تعذرت مشاركة النسخة", Toast.LENGTH_LONG).show() }
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    val directory = File(filesDir, "backups").apply { mkdirs() }
+                    File(directory, "SmartTasks-Backup.json").apply {
+                        writeText(TaskRepository.exportJson(this@MainActivity), Charsets.UTF_8)
+                    }
+                }
+            }
+            result.onSuccess { file ->
+                shareFile(file, "application/json", "نسخة احتياطية لمهامي")
+                AppLog.write(this@MainActivity, "BACKUP_SHARE_OPENED")
+            }.onFailure {
+                Toast.makeText(this@MainActivity, "تعذرت مشاركة النسخة", Toast.LENGTH_LONG).show()
+            }
+        }
     }
 
     private fun createLocalBackup() {
-        runCatching { TaskRepository.createLocalBackup(this) }
-            .onSuccess { Toast.makeText(this, "تم إنشاء نسخة احتياطية محلية", Toast.LENGTH_SHORT).show() }
-            .onFailure { Toast.makeText(this, it.message, Toast.LENGTH_LONG).show() }
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching { TaskRepository.createLocalBackup(this@MainActivity) }
+            }
+            result.onSuccess {
+                Toast.makeText(
+                    this@MainActivity,
+                    "تم إنشاء نسخة احتياطية محلية",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }.onFailure { error ->
+                Toast.makeText(this@MainActivity, error.message, Toast.LENGTH_LONG).show()
+            }
+        }
     }
 
     private fun restoreLocalBackup() {
-        TaskRepository.restoreLocalBackup(this)
-            .onSuccess {
-                AlarmScheduler.restoreAll(this, "local backup restore")
-                Toast.makeText(this, "تمت استعادة ${it} مهمة", Toast.LENGTH_LONG).show()
-                refreshTick++
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                TaskRepository.restoreLocalBackup(this@MainActivity).map { count ->
+                    AlarmScheduler.restoreAll(this@MainActivity, "local backup restore")
+                    count
+                }
             }
-            .onFailure { Toast.makeText(this, it.message, Toast.LENGTH_LONG).show() }
+            result.onSuccess { count ->
+                Toast.makeText(
+                    this@MainActivity,
+                    "تمت استعادة ${NumberFormatUtils.number(count)} مهمة",
+                    Toast.LENGTH_LONG
+                ).show()
+                refreshTick++
+            }.onFailure { error ->
+                Toast.makeText(this@MainActivity, error.message, Toast.LENGTH_LONG).show()
+            }
+        }
     }
 
     private fun shareLog() {
-        runCatching { shareFile(AppLog.logFile(this), "text/plain", "سجل تشخيص Smart Tasks") }
-            .onFailure { Toast.makeText(this, "تعذرت مشاركة السجل", Toast.LENGTH_LONG).show() }
+        runCatching {
+            shareFile(AppLog.logFile(this), "text/plain", "سجل تشخيص Smart Tasks")
+        }.onFailure {
+            Toast.makeText(this, "تعذرت مشاركة السجل", Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun shareFile(file: File, mime: String, subject: String) {
         val uri = FileProvider.getUriForFile(this, "$packageName.files", file)
-        startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
-            type = mime
-            putExtra(Intent.EXTRA_SUBJECT, subject)
-            putExtra(Intent.EXTRA_STREAM, uri)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }, "مشاركة"))
+        startActivity(
+            Intent.createChooser(
+                Intent(Intent.ACTION_SEND).apply {
+                    type = mime
+                    putExtra(Intent.EXTRA_SUBJECT, subject)
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                },
+                "مشاركة"
+            )
+        )
     }
 }
