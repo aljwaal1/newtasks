@@ -34,7 +34,9 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -65,7 +67,18 @@ class AlarmActivity : ComponentActivity() {
         readIntent(intent)
         ensureAlarmService()
         AppLog.write(this, "ALARM_ACTIVITY_OPENED", "task=$taskId title=$alarmTitle")
+        render()
+    }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        readIntent(intent)
+        ensureAlarmService()
+        AppLog.write(this, "ALARM_ACTIVITY_NEW_INTENT", "task=$taskId title=$alarmTitle")
+    }
+
+    private fun render() {
         setContent {
             androidx.compose.runtime.CompositionLocalProvider(
                 LocalLayoutDirection provides LayoutDirection.Rtl
@@ -90,14 +103,6 @@ class AlarmActivity : ComponentActivity() {
                 }
             }
         }
-    }
-
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        setIntent(intent)
-        readIntent(intent)
-        ensureAlarmService()
-        AppLog.write(this, "ALARM_ACTIVITY_NEW_INTENT", "task=$taskId title=$alarmTitle")
     }
 
     private fun configureAlarmWindow() {
@@ -212,7 +217,7 @@ private fun AlarmScreen(
     onStopSound: () -> Unit
 ) {
     BackHandler(enabled = true) { }
-    var now by mutableStateOf(System.currentTimeMillis())
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
         while (currentCoroutineContext().isActive) {
             now = System.currentTimeMillis()
@@ -248,31 +253,7 @@ private fun AlarmScreen(
                 )
                 Text(NumberFormatUtils.formatWeekdayDate(now), color = Color(0xFF64748B))
                 Spacer(Modifier.height(20.dp))
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color.White, RoundedCornerShape(24.dp))
-                        .padding(22.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        title,
-                        textAlign = TextAlign.Center,
-                        fontSize = 25.sp,
-                        lineHeight = 34.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF0F172A)
-                    )
-                    if (notes.isNotBlank()) {
-                        Spacer(Modifier.height(10.dp))
-                        Text(
-                            notes,
-                            textAlign = TextAlign.Center,
-                            color = Color(0xFF64748B),
-                            lineHeight = 24.sp
-                        )
-                    }
-                }
+                AlarmContent(title, notes)
                 Spacer(Modifier.height(22.dp))
                 Button(
                     onClick = onDone,
@@ -288,22 +269,8 @@ private fun AlarmScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    OutlinedButton(
-                        onClick = onSnooze5,
-                        modifier = Modifier.weight(1f).height(54.dp),
-                        shape = RoundedCornerShape(16.dp)
-                    ) {
-                        Icon(Icons.Default.Snooze, null)
-                        Text("  5 دقائق")
-                    }
-                    OutlinedButton(
-                        onClick = onSnooze10,
-                        modifier = Modifier.weight(1f).height(54.dp),
-                        shape = RoundedCornerShape(16.dp)
-                    ) {
-                        Icon(Icons.Default.Snooze, null)
-                        Text("  10 دقائق")
-                    }
+                    SnoozeButton("5 دقائق", onSnooze5, Modifier.weight(1f))
+                    SnoozeButton("10 دقائق", onSnooze10, Modifier.weight(1f))
                 }
                 Spacer(Modifier.height(8.dp))
                 OutlinedButton(
@@ -316,5 +283,50 @@ private fun AlarmScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun AlarmContent(title: String, notes: String) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color.White, RoundedCornerShape(24.dp))
+            .padding(22.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            title,
+            textAlign = TextAlign.Center,
+            fontSize = 25.sp,
+            lineHeight = 34.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFF0F172A)
+        )
+        if (notes.isNotBlank()) {
+            Spacer(Modifier.height(10.dp))
+            Text(
+                notes,
+                textAlign = TextAlign.Center,
+                color = Color(0xFF64748B),
+                lineHeight = 24.sp
+            )
+        }
+    }
+}
+
+@Composable
+private fun SnoozeButton(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier
+) {
+    OutlinedButton(
+        onClick = onClick,
+        modifier = modifier.height(54.dp),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Icon(Icons.Default.Snooze, null)
+        Text("  $label")
     }
 }
