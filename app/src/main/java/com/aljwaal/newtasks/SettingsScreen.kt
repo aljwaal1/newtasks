@@ -43,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -72,16 +73,24 @@ internal fun SettingsScreen(
     val scope = rememberCoroutineScope()
     var permissions by remember { mutableStateOf(PermissionInspector.snapshot(context)) }
     var categories by remember { mutableStateOf<List<String>>(emptyList()) }
+    var priorities by remember { mutableStateOf(TaskPriority.defaults) }
     var newCategory by remember { mutableStateOf("") }
+    var newPriority by remember { mutableStateOf("") }
+    var priorityMessage by remember { mutableStateOf<String?>(null) }
     var logText by remember { mutableStateOf("جاري تحميل سجل التشخيص...") }
 
     LaunchedEffect(refreshTick) {
         permissions = PermissionInspector.snapshot(context)
         val snapshot = withContext(Dispatchers.IO) {
-            TaskRepository.categories(context) to AppLog.readTail(context, 12_000)
+            Triple(
+                TaskRepository.categories(context),
+                TaskRepository.priorities(context),
+                AppLog.readTail(context, 12_000)
+            )
         }
         categories = snapshot.first
-        logText = snapshot.second
+        priorities = snapshot.second
+        logText = snapshot.third
     }
 
     LazyColumn(
@@ -201,6 +210,7 @@ internal fun SettingsScreen(
                                     }
                                     newCategory = ""
                                     categories = updated
+                                    onRefresh()
                                 }
                             }
                         ) {
@@ -218,6 +228,7 @@ internal fun SettingsScreen(
                                                 TaskRepository.deleteCategory(context, category)
                                                 TaskRepository.categories(context)
                                             }
+                                            onRefresh()
                                         }
                                     }
                                 ) {
@@ -230,6 +241,105 @@ internal fun SettingsScreen(
                             }
                         }
                         HorizontalDivider(color = Color(0xFFF1F5F9))
+                    }
+                }
+            }
+        }
+
+        item { SectionHeader("الأولويات", "الافتراضي: عادية، متوسطة، عاجلة") }
+        item {
+            Card(
+                shape = RoundedCornerShape(22.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        "حالة المهمة منفصلة وتبقى فقط: قيد التنفيذ أو مكتملة.",
+                        color = Color(0xFF64748B),
+                        fontSize = 12.sp
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        OutlinedTextField(
+                            value = newPriority,
+                            onValueChange = {
+                                newPriority = NumberFormatUtils.latinDigits(it)
+                                priorityMessage = null
+                            },
+                            modifier = Modifier.weight(1f),
+                            label = { Text("أولوية إضافية") },
+                            singleLine = true
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        IconButton(
+                            onClick = {
+                                val value = NumberFormatUtils.latinDigits(newPriority).trim()
+                                if (value.isBlank()) return@IconButton
+                                scope.launch {
+                                    val added = withContext(Dispatchers.IO) {
+                                        TaskRepository.addPriority(context, value)
+                                    }
+                                    if (added) {
+                                        newPriority = ""
+                                        priorities = withContext(Dispatchers.IO) {
+                                            TaskRepository.priorities(context)
+                                        }
+                                        priorityMessage = "تمت إضافة الأولوية."
+                                        onRefresh()
+                                    } else {
+                                        priorityMessage = "الاسم موجود أو غير صالح."
+                                    }
+                                }
+                            }
+                        ) {
+                            Icon(Icons.Default.Add, null, tint = Color(0xFF4F46E5))
+                        }
+                    }
+                    priorities.forEach { priority ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                priority.label,
+                                modifier = Modifier.weight(1f),
+                                fontWeight = if (priority.isDefault) FontWeight.Bold else FontWeight.Normal
+                            )
+                            if (!priority.isDefault) {
+                                IconButton(
+                                    onClick = {
+                                        scope.launch {
+                                            val deleted = withContext(Dispatchers.IO) {
+                                                TaskRepository.deletePriority(context, priority.id)
+                                            }
+                                            if (deleted) {
+                                                priorities = withContext(Dispatchers.IO) {
+                                                    TaskRepository.priorities(context)
+                                                }
+                                                priorityMessage = "تم حذف الأولوية."
+                                                onRefresh()
+                                            } else {
+                                                priorityMessage = "لا يمكن حذف أولوية مستخدمة في مهمة."
+                                            }
+                                        }
+                                    }
+                                ) {
+                                    Icon(
+                                        Icons.Default.Delete,
+                                        null,
+                                        tint = Color(0xFFDC2626)
+                                    )
+                                }
+                            }
+                        }
+                        HorizontalDivider(color = Color(0xFFF1F5F9))
+                    }
+                    priorityMessage?.let {
+                        Text(
+                            it,
+                            color = if (it.startsWith("تم")) Color(0xFF047857) else Color(0xFFB91C1C),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
                     }
                 }
             }
