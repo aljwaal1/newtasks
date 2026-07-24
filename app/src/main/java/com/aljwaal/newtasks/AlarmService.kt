@@ -3,10 +3,14 @@ package com.aljwaal.newtasks
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import androidx.core.content.ContextCompat
 
 class AlarmService : Service() {
+    private val timeoutHandler = Handler(Looper.getMainLooper())
+    private var timeoutRunnable: Runnable? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -65,6 +69,7 @@ class AlarmService : Service() {
                     "${error.javaClass.simpleName}: ${error.message}"
                 )
             }
+        scheduleAutomaticServiceRelease(kind, taskId)
 
         if (launchScreen) {
             val launched = AlarmActivityLauncher.launch(
@@ -83,7 +88,27 @@ class AlarmService : Service() {
         return START_NOT_STICKY
     }
 
+    private fun scheduleAutomaticServiceRelease(kind: String, taskId: String) {
+        timeoutRunnable?.let(timeoutHandler::removeCallbacks)
+        val delayMillis = AlarmPlayer.maxDurationMillis(this) + 750L
+        val runnable = Runnable {
+            AlarmPlayer.stop(this)
+            @Suppress("DEPRECATION")
+            stopForeground(false)
+            AppLog.write(
+                this,
+                "ALARM_SERVICE_AUTO_RELEASED",
+                "kind=$kind task=$taskId delay=$delayMillis notificationRetained=true"
+            )
+            stopSelf()
+        }
+        timeoutRunnable = runnable
+        timeoutHandler.postDelayed(runnable, delayMillis)
+    }
+
     override fun onDestroy() {
+        timeoutRunnable?.let(timeoutHandler::removeCallbacks)
+        timeoutRunnable = null
         running = false
         AlarmPlayer.stop(this)
         AppLog.write(this, "ALARM_SERVICE_DESTROYED")
