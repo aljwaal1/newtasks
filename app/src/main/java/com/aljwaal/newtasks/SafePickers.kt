@@ -40,9 +40,11 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -173,13 +175,15 @@ internal fun SafeTimePickerDialog(
     val initial = remember(initialMillis) {
         Calendar.getInstance().apply { timeInMillis = initialMillis }
     }
-    var hourText by remember(initialMillis) {
-        mutableStateOf(NumberFormatUtils.twoDigits(initial.get(Calendar.HOUR_OF_DAY)))
+    var hourField by remember(initialMillis) {
+        mutableStateOf(selectAllValue(NumberFormatUtils.twoDigits(initial.get(Calendar.HOUR_OF_DAY))))
     }
-    var minuteText by remember(initialMillis) {
-        mutableStateOf(NumberFormatUtils.twoDigits(initial.get(Calendar.MINUTE)))
+    var minuteField by remember(initialMillis) {
+        mutableStateOf(selectAllValue(NumberFormatUtils.twoDigits(initial.get(Calendar.MINUTE))))
     }
     val minuteFocus = remember { FocusRequester() }
+    val hourText = hourField.text
+    val minuteText = minuteField.text
     val hour = hourText.toIntOrNull()
     val minute = minuteText.toIntOrNull()
     val hourValid = hour != null && hour in 0..23
@@ -191,7 +195,7 @@ internal fun SafeTimePickerDialog(
             Column(modifier = Modifier.padding(20.dp)) {
                 Text("إدخال الوقت", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 Text(
-                    "الدقائق أولًا بصريًا، ثم الساعة، مع عرض الوقت النهائي بصيغة الساعة:الدقائق.",
+                    "اضغط على الساعة أو الدقائق ثم اكتب الرقم الجديد مباشرة.",
                     color = Color(0xFF64748B),
                     fontSize = 12.sp
                 )
@@ -202,14 +206,18 @@ internal fun SafeTimePickerDialog(
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     OutlinedTextField(
-                        value = minuteText,
-                        onValueChange = { minuteText = sanitizeTimePart(it) },
+                        value = minuteField,
+                        onValueChange = { input ->
+                            minuteField = editableTimeValue(input.text)
+                        },
                         modifier = Modifier
                             .weight(1f)
                             .focusRequester(minuteFocus)
                             .onFocusChanged { state ->
-                                if (!state.isFocused && minuteValid) {
-                                    minuteText = NumberFormatUtils.twoDigits(minute!!)
+                                if (state.isFocused) {
+                                    minuteField = selectAllValue(minuteField.text)
+                                } else if (minuteValid) {
+                                    minuteField = selectAllValue(NumberFormatUtils.twoDigits(minute!!))
                                 }
                             },
                         label = { Text("الدقائق") },
@@ -230,18 +238,22 @@ internal fun SafeTimePickerDialog(
                     )
                     Text(":", fontSize = 30.sp, fontWeight = FontWeight.Bold)
                     OutlinedTextField(
-                        value = hourText,
+                        value = hourField,
                         onValueChange = { input ->
-                            hourText = sanitizeTimePart(input)
-                            if (hourText.length == 2 && hourText.toIntOrNull() in 0..23) {
+                            val newValue = editableTimeValue(input.text)
+                            hourField = newValue
+                            val parsedHour = newValue.text.toIntOrNull()
+                            if (newValue.text.length == 2 && parsedHour != null && parsedHour in 0..23) {
                                 minuteFocus.requestFocus()
                             }
                         },
                         modifier = Modifier
                             .weight(1f)
                             .onFocusChanged { state ->
-                                if (!state.isFocused && hourValid) {
-                                    hourText = NumberFormatUtils.twoDigits(hour!!)
+                                if (state.isFocused) {
+                                    hourField = selectAllValue(hourField.text)
+                                } else if (hourValid) {
+                                    hourField = selectAllValue(NumberFormatUtils.twoDigits(hour!!))
                                 }
                             },
                         label = { Text("الساعة") },
@@ -304,6 +316,17 @@ private fun sanitizeTimePart(value: String): String =
     NumberFormatUtils.latinDigits(value)
         .filter { it.isDigit() }
         .take(2)
+
+private fun selectAllValue(text: String): TextFieldValue =
+    TextFieldValue(text = text, selection = TextRange(0, text.length))
+
+private fun editableTimeValue(value: String): TextFieldValue {
+    val sanitized = sanitizeTimePart(value)
+    return TextFieldValue(
+        text = sanitized,
+        selection = TextRange(sanitized.length)
+    )
+}
 
 internal fun setRelativeDate(baseMillis: Long, daysFromToday: Int): Long {
     val old = Calendar.getInstance().apply { timeInMillis = baseMillis }
