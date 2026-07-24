@@ -11,10 +11,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowForward
@@ -23,24 +23,30 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import java.util.Calendar
 
 @Composable
@@ -88,7 +94,13 @@ internal fun SafeDatePickerDialog(
                 }
                 Row(modifier = Modifier.fillMaxWidth()) {
                     listOf("س", "ح", "ن", "ث", "ر", "خ", "ج").forEach {
-                        Text(it, modifier = Modifier.weight(1f), textAlign = TextAlign.Center, color = Color(0xFF64748B), fontWeight = FontWeight.Bold)
+                        Text(
+                            it,
+                            modifier = Modifier.weight(1f),
+                            textAlign = TextAlign.Center,
+                            color = Color(0xFF64748B),
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
                 Spacer(Modifier.height(5.dp))
@@ -96,17 +108,27 @@ internal fun SafeDatePickerDialog(
                     Row(modifier = Modifier.fillMaxWidth()) {
                         repeat(7) { index ->
                             val day = week.getOrNull(index) ?: 0
-                            Box(modifier = Modifier.weight(1f).padding(2.dp), contentAlignment = Alignment.Center) {
+                            Box(
+                                modifier = Modifier.weight(1f).padding(2.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
                                 if (day > 0) {
                                     Box(
                                         modifier = Modifier
                                             .size(38.dp)
                                             .clip(CircleShape)
-                                            .background(if (day == safeSelectedDay) Color(0xFF4F46E5) else Color.Transparent)
+                                            .background(
+                                                if (day == safeSelectedDay) Color(0xFF4F46E5)
+                                                else Color.Transparent
+                                            )
                                             .clickable { selectedDay = day },
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Text(day.toString(), color = if (day == safeSelectedDay) Color.White else Color(0xFF0F172A))
+                                        Text(
+                                            day.toString(),
+                                            color = if (day == safeSelectedDay) Color.White
+                                            else Color(0xFF0F172A)
+                                        )
                                     }
                                 }
                             }
@@ -115,8 +137,15 @@ internal fun SafeDatePickerDialog(
                 }
                 Spacer(Modifier.height(12.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f)) { Text("إلغاء") }
-                    Button(onClick = { onConfirm(year, month, safeSelectedDay) }, modifier = Modifier.weight(1f)) { Text("اختيار") }
+                    OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f)) {
+                        Text("إلغاء")
+                    }
+                    Button(
+                        onClick = { onConfirm(year, month, safeSelectedDay) },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("اختيار")
+                    }
                 }
             }
         }
@@ -130,85 +159,129 @@ internal fun SafeTimePickerDialog(
     onConfirm: (Int, Int) -> Unit
 ) {
     val initial = remember(initialMillis) { Calendar.getInstance().apply { timeInMillis = initialMillis } }
-    var hour by remember { mutableIntStateOf(initial.get(Calendar.HOUR_OF_DAY)) }
-    var minute by remember { mutableIntStateOf((initial.get(Calendar.MINUTE) / 5) * 5) }
+    var hourText by remember(initialMillis) {
+        mutableStateOf(NumberFormatUtils.twoDigits(initial.get(Calendar.HOUR_OF_DAY)))
+    }
+    var minuteText by remember(initialMillis) {
+        mutableStateOf(NumberFormatUtils.twoDigits(initial.get(Calendar.MINUTE)))
+    }
+    val minuteFocus = remember { FocusRequester() }
+    val hour = hourText.toIntOrNull()
+    val minute = minuteText.toIntOrNull()
+    val hourValid = hour != null && hour in 0..23
+    val minuteValid = minute != null && minute in 0..59
+    val valid = hourValid && minuteValid
 
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Surface(
-            modifier = Modifier.fillMaxWidth().padding(18.dp),
-            shape = RoundedCornerShape(26.dp),
-            color = Color.White
-        ) {
-            Column(modifier = Modifier.verticalScroll(rememberScrollState()).padding(18.dp)) {
-                Text("اختر الوقت", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                Text("لا توجد كتابة يدوية؛ اختر الساعة والدقيقة فقط.", color = Color(0xFF64748B), fontSize = 12.sp)
-                Spacer(Modifier.height(14.dp))
-                Text("الساعة", fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(6.dp))
-                (0..23).chunked(6).forEach { rowHours ->
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                        rowHours.forEach { item ->
-                            TimeCell(
-                                text = NumberFormatUtils.twoDigits(item),
-                                selected = hour == item,
-                                modifier = Modifier.weight(1f)
-                            ) { hour = item }
-                        }
-                    }
-                    Spacer(Modifier.height(5.dp))
-                }
-                Spacer(Modifier.height(10.dp))
-                Text("الدقيقة", fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(6.dp))
-                (0..55 step 5).toList().chunked(6).forEach { rowMinutes ->
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                        rowMinutes.forEach { item ->
-                            TimeCell(
-                                text = NumberFormatUtils.twoDigits(item),
-                                selected = minute == item,
-                                modifier = Modifier.weight(1f)
-                            ) { minute = item }
-                        }
-                    }
-                    Spacer(Modifier.height(5.dp))
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(shape = RoundedCornerShape(26.dp), color = Color.White) {
+            Column(modifier = Modifier.padding(20.dp)) {
+                Text("إدخال الوقت", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    "أدخل الساعة والدقائق كل واحدة في خانة مستقلة.",
+                    color = Color(0xFF64748B),
+                    fontSize = 12.sp
+                )
+                Spacer(Modifier.height(18.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OutlinedTextField(
+                        value = hourText,
+                        onValueChange = { input ->
+                            hourText = sanitizeTimePart(input)
+                            if (hourText.length == 2 && hourText.toIntOrNull() in 0..23) {
+                                minuteFocus.requestFocus()
+                            }
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .onFocusChanged { state ->
+                                if (!state.isFocused && hourValid) {
+                                    hourText = NumberFormatUtils.twoDigits(hour!!)
+                                }
+                            },
+                        label = { Text("الساعة") },
+                        placeholder = { Text("00") },
+                        singleLine = true,
+                        isError = hourText.isNotEmpty() && !hourValid,
+                        supportingText = {
+                            Text(if (hourValid || hourText.isEmpty()) "من 00 إلى 23" else "ساعة غير صحيحة")
+                        },
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Number,
+                            imeAction = ImeAction.Next
+                        ),
+                        keyboardActions = KeyboardActions(onNext = { minuteFocus.requestFocus() }),
+                        shape = RoundedCornerShape(16.dp)
+                    )
+                    Text(":", fontSize = 30.sp, fontWeight = FontWeight.Bold)
+                    OutlinedTextField(
+                        value = minuteText,
+                        onValueChange = { minuteText = sanitizeTimePart(it) },
+                        modifier = Modifier
+                            .weight(1f)
+                            .focusRequester(minuteFocus)
+                            .onFocusChanged { state ->
+                                if (!state.isFocused && minuteValid) {
+                                    minuteText = NumberFormatUtils.twoDigits(minute!!)
+                                }
+                            },
+                        label = { Text("الدقائق") },
+                        placeholder = { Text("00") },
+                        singleLine = true,
+                        isError = minuteText.isNotEmpty() && !minuteValid,
+                        supportingText = {
+                            Text(if (minuteValid || minuteText.isEmpty()) "من 00 إلى 59" else "دقائق غير صحيحة")
+                        },
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Number,
+                            imeAction = ImeAction.Done
+                        ),
+                        shape = RoundedCornerShape(16.dp)
+                    )
                 }
                 Spacer(Modifier.height(12.dp))
-                Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFEEF2FF))) {
+                Card(
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFEEF2FF))
+                ) {
                     Text(
-                        "${NumberFormatUtils.twoDigits(hour)}:${NumberFormatUtils.twoDigits(minute)}",
-                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        if (valid) {
+                            "${NumberFormatUtils.twoDigits(hour!!)}:${NumberFormatUtils.twoDigits(minute!!)}"
+                        } else {
+                            "--:--"
+                        },
+                        modifier = Modifier.fillMaxWidth().padding(14.dp),
                         textAlign = TextAlign.Center,
-                        fontSize = 30.sp,
+                        fontSize = 28.sp,
                         fontWeight = FontWeight.Black,
                         color = Color(0xFF4338CA)
                     )
                 }
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(14.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f)) { Text("إلغاء") }
-                    Button(onClick = { onConfirm(hour, minute) }, modifier = Modifier.weight(1f)) { Text("اختيار") }
+                    OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f)) {
+                        Text("إلغاء")
+                    }
+                    Button(
+                        onClick = { onConfirm(hour!!, minute!!) },
+                        enabled = valid,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("اختيار")
+                    }
                 }
             }
         }
     }
 }
 
-@Composable
-private fun TimeCell(text: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    Surface(
-        modifier = modifier.clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick),
-        shape = RoundedCornerShape(12.dp),
-        color = if (selected) Color(0xFF4F46E5) else Color(0xFFF8FAFC)
-    ) {
-        Text(
-            text,
-            modifier = Modifier.padding(vertical = 10.dp),
-            textAlign = TextAlign.Center,
-            color = if (selected) Color.White else Color(0xFF334155),
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
-        )
-    }
-}
+private fun sanitizeTimePart(value: String): String =
+    NumberFormatUtils.latinDigits(value)
+        .filter { it.isDigit() }
+        .take(2)
 
 internal fun setRelativeDate(baseMillis: Long, daysFromToday: Int): Long {
     val old = Calendar.getInstance().apply { timeInMillis = baseMillis }
