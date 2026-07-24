@@ -19,13 +19,6 @@ import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-enum class TaskListFilter(val label: String) {
-    ALL("الكل"),
-    PENDING("قيد التنفيذ"),
-    OVERDUE("متأخرة"),
-    COMPLETED("مكتملة")
-}
-
 @Composable
 fun SmartTasksRoot(
     refreshTick: Int,
