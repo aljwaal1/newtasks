@@ -88,6 +88,7 @@ fun SmartTasksRoot(
     var destination by remember { mutableStateOf(AppDestination.HOME) }
     var tasks by remember { mutableStateOf<List<TaskItem>>(emptyList()) }
     var categories by remember { mutableStateOf<List<String>>(emptyList()) }
+    var priorities by remember { mutableStateOf(TaskPriority.defaults) }
     var isLoading by remember { mutableStateOf(true) }
     var editingTask by remember { mutableStateOf<TaskItem?>(null) }
     var showEditor by remember { mutableStateOf(false) }
@@ -96,10 +97,15 @@ fun SmartTasksRoot(
     LaunchedEffect(refreshTick) {
         isLoading = true
         val snapshot = withContext(Dispatchers.IO) {
-            TaskRepository.list(context) to TaskRepository.categories(context)
+            Triple(
+                TaskRepository.list(context),
+                TaskRepository.categories(context),
+                TaskRepository.priorities(context)
+            )
         }
         tasks = snapshot.first
         categories = snapshot.second
+        priorities = snapshot.third
         isLoading = false
     }
 
@@ -155,6 +161,7 @@ fun SmartTasksRoot(
 
                     AppDestination.TASKS -> TasksScreen(
                         tasks = tasks,
+                        priorities = priorities,
                         onEdit = {
                             editingTask = it
                             showEditor = true
@@ -198,6 +205,7 @@ fun SmartTasksRoot(
         TaskEditorDialog(
             existing = editingTask,
             categories = categories.ifEmpty { listOf("عام") },
+            priorities = priorities.ifEmpty { TaskPriority.defaults },
             onDismiss = { showEditor = false },
             onSave = {
                 onSaveTask(it)
