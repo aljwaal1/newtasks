@@ -59,14 +59,16 @@ class AlarmActivity : ComponentActivity() {
     private var taskId by mutableStateOf("")
     private var alarmTitle by mutableStateOf("حان موعد المهمة")
     private var alarmNotes by mutableStateOf("")
-    private var alarmKind = AlarmScheduler.KIND_TEST
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         configureAlarmWindow()
         readIntent(intent)
-        ensureAlarmServiceOnlyWhenMissing()
-        AppLog.write(this, "ALARM_ACTIVITY_OPENED", "task=$taskId title=$alarmTitle")
+        AppLog.write(
+            this,
+            "ALARM_ACTIVITY_OPENED",
+            "task=$taskId title=$alarmTitle serviceRestarted=false"
+        )
         render()
     }
 
@@ -74,8 +76,11 @@ class AlarmActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         readIntent(intent)
-        ensureAlarmServiceOnlyWhenMissing()
-        AppLog.write(this, "ALARM_ACTIVITY_NEW_INTENT", "task=$taskId title=$alarmTitle")
+        AppLog.write(
+            this,
+            "ALARM_ACTIVITY_NEW_INTENT",
+            "task=$taskId title=$alarmTitle serviceRestarted=false"
+        )
     }
 
     private fun render() {
@@ -131,31 +136,6 @@ class AlarmActivity : ComponentActivity() {
         alarmNotes = NumberFormatUtils.latinDigits(
             intent?.getStringExtra(AlarmScheduler.EXTRA_NOTES).orEmpty()
         )
-        alarmKind = intent?.getStringExtra(AlarmScheduler.EXTRA_KIND)
-            ?: AlarmScheduler.KIND_TEST
-    }
-
-    private fun ensureAlarmServiceOnlyWhenMissing() {
-        if (AlarmService.isRunning()) {
-            AppLog.write(this, "ALARM_ACTIVITY_SERVICE_START_SKIPPED", "alreadyRunning=true")
-            return
-        }
-        runCatching {
-            AlarmService.start(
-                context = this,
-                taskId = taskId,
-                title = alarmTitle,
-                notes = alarmNotes,
-                kind = alarmKind,
-                launchScreen = false
-            )
-        }.onFailure { error ->
-            AppLog.write(
-                this,
-                "ALARM_ACTIVITY_SERVICE_START_FAILED",
-                "${error.javaClass.simpleName}: ${error.message}"
-            )
-        }
     }
 
     private fun stopAlarm() {
