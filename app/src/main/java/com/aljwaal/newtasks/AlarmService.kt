@@ -10,6 +10,7 @@ class AlarmService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        running = true
         AppLog.write(this, "ALARM_SERVICE_CREATED")
     }
 
@@ -43,7 +44,6 @@ class AlarmService : Service() {
         }
 
         if (!foregroundStarted) {
-            // حتى إذا منع النظام الخدمة، حاول إظهار واجهة المنبه والإشعار العادي.
             AlarmNotification.post(this, taskId, title, notes, kind)
             AlarmActivityLauncher.launch(
                 context = this,
@@ -57,7 +57,14 @@ class AlarmService : Service() {
             return START_NOT_STICKY
         }
 
-        AlarmPlayer.start(this)
+        runCatching { AlarmPlayer.start(this) }
+            .onFailure { error ->
+                AppLog.write(
+                    this,
+                    "ALARM_PLAYER_START_FAILED",
+                    "${error.javaClass.simpleName}: ${error.message}"
+                )
+            }
 
         if (launchScreen) {
             val launched = AlarmActivityLauncher.launch(
@@ -77,6 +84,7 @@ class AlarmService : Service() {
     }
 
     override fun onDestroy() {
+        running = false
         AlarmPlayer.stop(this)
         AppLog.write(this, "ALARM_SERVICE_DESTROYED")
         super.onDestroy()
@@ -86,6 +94,11 @@ class AlarmService : Service() {
 
     companion object {
         private const val EXTRA_LAUNCH_SCREEN = "launch_alarm_screen"
+
+        @Volatile
+        private var running: Boolean = false
+
+        fun isRunning(): Boolean = running
 
         fun start(
             context: Context,
