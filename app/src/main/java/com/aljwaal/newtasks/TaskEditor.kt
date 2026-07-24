@@ -17,6 +17,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -31,6 +33,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -90,6 +93,13 @@ fun TaskEditorDialog(
     var dueAt by remember(existing) { mutableStateOf(initial) }
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
+    var showAdvanced by remember(existing) {
+        mutableStateOf(
+            existing?.notes?.isNotBlank() == true ||
+                existing?.category?.let { it != "عام" } == true ||
+                existing?.repeatRule != null && existing.repeatRule != RepeatRule.NONE
+        )
+    }
     var error by remember { mutableStateOf<String?>(null) }
 
     Dialog(
@@ -97,32 +107,15 @@ fun TaskEditorDialog(
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Surface(
-            modifier = Modifier.fillMaxSize().padding(8.dp),
-            shape = RoundedCornerShape(24.dp),
+            modifier = Modifier.fillMaxSize().padding(10.dp),
+            shape = RoundedCornerShape(26.dp),
             color = Color(0xFFF8FAFC)
         ) {
             Column(
-                modifier = Modifier.fillMaxSize().padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(7.dp)
+                modifier = Modifier.fillMaxSize().padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(9.dp)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            if (existing == null) "إضافة مهمة" else "تعديل المهمة",
-                            fontSize = 21.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF0F172A)
-                        )
-                        Text(
-                            "كل الحقول في نافذة واحدة",
-                            color = Color(0xFF64748B),
-                            fontSize = 10.sp
-                        )
-                    }
-                    IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, "إغلاق")
-                    }
-                }
+                EditorHeader(existing = existing, onDismiss = onDismiss)
 
                 OutlinedTextField(
                     value = title,
@@ -131,39 +124,38 @@ fun TaskEditorDialog(
                         error = null
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("عنوان المهمة *") },
+                    label = { Text("ما المهمة؟") },
+                    placeholder = { Text("اكتب عنوانًا واضحًا") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(
                         capitalization = KeyboardCapitalization.Sentences
                     ),
-                    shape = RoundedCornerShape(14.dp)
-                )
-                OutlinedTextField(
-                    value = notes,
-                    onValueChange = { notes = NumberFormatUtils.latinDigits(it) },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("ملاحظات") },
-                    minLines = 1,
-                    maxLines = 2,
-                    shape = RoundedCornerShape(14.dp)
+                    shape = RoundedCornerShape(16.dp)
                 )
 
+                Text("الموعد", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(7.dp)
                 ) {
                     QuickDateButton("اليوم", Modifier.weight(1f)) {
                         dueAt = setRelativeDate(dueAt, 0)
+                        error = null
                     }
                     QuickDateButton("غدًا", Modifier.weight(1f)) {
                         dueAt = setRelativeDate(dueAt, 1)
+                        error = null
                     }
                     QuickDateButton("بعد أسبوع", Modifier.weight(1f)) {
                         dueAt = setRelativeDate(dueAt, 7)
+                        error = null
                     }
                 }
 
-                Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     DateTimeField(
                         modifier = Modifier.weight(1f),
                         icon = Icons.Default.CalendarMonth,
@@ -180,14 +172,10 @@ fun TaskEditorDialog(
                     )
                 }
 
-                Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                    SelectorField(
-                        modifier = Modifier.weight(1f),
-                        label = "التصنيف",
-                        value = category,
-                        options = categories,
-                        onSelected = { category = NumberFormatUtils.latinDigits(it) }
-                    )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     SelectorField(
                         modifier = Modifier.weight(1f),
                         label = "الأولوية",
@@ -198,43 +186,57 @@ fun TaskEditorDialog(
                                 ?: TaskPriority.NORMAL
                         }
                     )
+                    ReminderField(
+                        enabled = reminderEnabled,
+                        onChanged = {
+                            reminderEnabled = it
+                            error = null
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
                 }
 
-                Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                    SelectorField(
-                        modifier = Modifier.weight(1f),
-                        label = "التكرار",
-                        value = repeatRule.label,
-                        options = RepeatRule.entries.map { it.label },
-                        onSelected = { label ->
-                            repeatRule = RepeatRule.entries.first { it.label == label }
-                        }
+                TextButton(
+                    onClick = { showAdvanced = !showAdvanced },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(
+                        if (showAdvanced) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        null
                     )
-                    Card(
-                        modifier = Modifier.weight(1f).height(58.dp),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color.White)
+                    Spacer(Modifier.width(6.dp))
+                    Text(if (showAdvanced) "إخفاء التفاصيل الإضافية" else "تفاصيل إضافية")
+                }
+
+                if (showAdvanced) {
+                    OutlinedTextField(
+                        value = notes,
+                        onValueChange = { notes = NumberFormatUtils.latinDigits(it) },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("ملاحظات") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(14.dp)
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxSize().padding(horizontal = 9.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text("التنبيه", fontSize = 10.sp, color = Color(0xFF64748B))
-                                Text(
-                                    if (reminderEnabled) "مفعّل" else "متوقف",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 12.sp
-                                )
+                        SelectorField(
+                            modifier = Modifier.weight(1f),
+                            label = "التصنيف",
+                            value = category,
+                            options = categories,
+                            onSelected = { category = NumberFormatUtils.latinDigits(it) }
+                        )
+                        SelectorField(
+                            modifier = Modifier.weight(1f),
+                            label = "التكرار",
+                            value = repeatRule.label,
+                            options = RepeatRule.entries.map { it.label },
+                            onSelected = { label ->
+                                repeatRule = RepeatRule.entries.first { it.label == label }
                             }
-                            Switch(
-                                checked = reminderEnabled,
-                                onCheckedChange = {
-                                    reminderEnabled = it
-                                    error = null
-                                }
-                            )
-                        }
+                        )
                     }
                 }
 
@@ -244,17 +246,20 @@ fun TaskEditorDialog(
                         color = MaterialTheme.colorScheme.error,
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 12.sp,
-                        maxLines = 1,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
 
                 Spacer(Modifier.weight(1f))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     OutlinedButton(
                         onClick = onDismiss,
-                        modifier = Modifier.weight(1f).height(48.dp),
-                        shape = RoundedCornerShape(14.dp)
+                        modifier = Modifier.weight(1f).height(52.dp),
+                        shape = RoundedCornerShape(16.dp)
                     ) {
                         Text("إلغاء")
                     }
@@ -285,10 +290,13 @@ fun TaskEditorDialog(
                                 )
                             }
                         },
-                        modifier = Modifier.weight(1f).height(48.dp),
-                        shape = RoundedCornerShape(14.dp)
+                        modifier = Modifier.weight(1.35f).height(52.dp),
+                        shape = RoundedCornerShape(16.dp)
                     ) {
-                        Text("حفظ المهمة", fontWeight = FontWeight.Bold)
+                        Text(
+                            if (existing == null) "إضافة المهمة" else "حفظ التعديل",
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
             }
@@ -327,6 +335,56 @@ fun TaskEditorDialog(
 }
 
 @Composable
+private fun EditorHeader(existing: TaskItem?, onDismiss: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                if (existing == null) "مهمة جديدة" else "تعديل المهمة",
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Black,
+                color = Color(0xFF0F172A)
+            )
+            Text(
+                if (existing == null) "أدخل الأساسيات واحفظ مباشرة" else "حدّث ما تحتاجه فقط",
+                color = Color(0xFF64748B),
+                fontSize = 11.sp
+            )
+        }
+        IconButton(onClick = onDismiss) {
+            Icon(Icons.Default.Close, "إغلاق")
+        }
+    }
+}
+
+@Composable
+private fun ReminderField(
+    enabled: Boolean,
+    onChanged: (Boolean) -> Unit,
+    modifier: Modifier
+) {
+    Card(
+        modifier = modifier.height(62.dp),
+        shape = RoundedCornerShape(15.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("التنبيه", color = Color(0xFF64748B), fontSize = 10.sp)
+                Text(
+                    if (enabled) "مفعّل" else "متوقف",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp
+                )
+            }
+            Switch(checked = enabled, onCheckedChange = onChanged)
+        }
+    }
+}
+
+@Composable
 private fun DateTimeField(
     modifier: Modifier,
     icon: ImageVector,
@@ -335,16 +393,16 @@ private fun DateTimeField(
     onClick: () -> Unit
 ) {
     Card(
-        modifier = modifier.height(58.dp).clickable(onClick = onClick),
-        shape = RoundedCornerShape(14.dp),
+        modifier = modifier.height(62.dp).clickable(onClick = onClick),
+        shape = RoundedCornerShape(15.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White)
     ) {
         Row(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 9.dp),
+            modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(icon, null, tint = Color(0xFF4F46E5), modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(6.dp))
+            Icon(icon, null, tint = Color(0xFF4F46E5), modifier = Modifier.size(19.dp))
+            Spacer(Modifier.width(7.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(label, color = Color(0xFF64748B), fontSize = 10.sp)
                 Text(
@@ -367,8 +425,8 @@ private fun QuickDateButton(
     onClick: () -> Unit
 ) {
     Surface(
-        modifier = modifier.height(34.dp).clickable(onClick = onClick),
-        shape = RoundedCornerShape(12.dp),
+        modifier = modifier.height(38.dp).clickable(onClick = onClick),
+        shape = RoundedCornerShape(13.dp),
         color = Color(0xFFEEF2FF)
     ) {
         Box(contentAlignment = Alignment.Center) {
@@ -393,12 +451,12 @@ private fun SelectorField(
     var expanded by remember { mutableStateOf(false) }
     Box(modifier = modifier) {
         Card(
-            modifier = Modifier.fillMaxWidth().height(58.dp).clickable { expanded = true },
-            shape = RoundedCornerShape(14.dp),
+            modifier = Modifier.fillMaxWidth().height(62.dp).clickable { expanded = true },
+            shape = RoundedCornerShape(15.dp),
             colors = CardDefaults.cardColors(containerColor = Color.White)
         ) {
             Row(
-                modifier = Modifier.fillMaxSize().padding(horizontal = 9.dp),
+                modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
@@ -415,10 +473,7 @@ private fun SelectorField(
                 Text("▼", color = Color(0xFF94A3B8), fontSize = 10.sp)
             }
         }
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false }
-        ) {
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             options.distinct().forEach { option ->
                 DropdownMenuItem(
                     text = { Text(option) },
@@ -431,3 +486,23 @@ private fun SelectorField(
         }
     }
 }
+
+private fun setRelativeDate(sourceMillis: Long, days: Int): Long {
+    val source = Calendar.getInstance().apply { timeInMillis = sourceMillis }
+    return Calendar.getInstance().apply {
+        add(Calendar.DAY_OF_YEAR, days)
+        set(Calendar.HOUR_OF_DAY, source.get(Calendar.HOUR_OF_DAY))
+        set(Calendar.MINUTE, source.get(Calendar.MINUTE))
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
+}
+
+private fun setTime(sourceMillis: Long, hour: Int, minute: Int): Long =
+    Calendar.getInstance().apply {
+        timeInMillis = sourceMillis
+        set(Calendar.HOUR_OF_DAY, hour)
+        set(Calendar.MINUTE, minute)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
