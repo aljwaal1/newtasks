@@ -46,9 +46,40 @@ object AlarmNotification {
         title: String,
         notes: String,
         kind: String
+    ): Notification = buildInternal(
+        context = context,
+        taskId = taskId,
+        title = title,
+        notes = notes,
+        kind = kind,
+        activeAlarm = true
+    )
+
+    private fun buildVisualReminder(
+        context: Context,
+        taskId: String,
+        title: String,
+        notes: String,
+        kind: String
+    ): Notification = buildInternal(
+        context = context,
+        taskId = taskId,
+        title = title,
+        notes = notes,
+        kind = kind,
+        activeAlarm = false
+    )
+
+    private fun buildInternal(
+        context: Context,
+        taskId: String,
+        title: String,
+        notes: String,
+        kind: String,
+        activeAlarm: Boolean
     ): Notification {
         ensureChannel(context)
-        val fullScreenPendingIntent = AlarmActivityLauncher.pendingIntent(
+        val screenPendingIntent = AlarmActivityLauncher.pendingIntent(
             context = context,
             requestCode = stableRequestCode("screen:$kind:$taskId", 3_101),
             taskId = taskId,
@@ -56,26 +87,37 @@ object AlarmNotification {
             notes = notes,
             kind = kind
         )
+        val body = notes.ifBlank {
+            if (activeAlarm) {
+                "حان موعد المهمة — اضغط لفتح شاشة التنبيه"
+            } else {
+                "انتهى صوت التنبيه، وما زالت المهمة بانتظارك"
+            }
+        }
 
-        val body = notes.ifBlank { "حان موعد المهمة — اضغط لفتح شاشة التنبيه" }
-        return NotificationCompat.Builder(context, CHANNEL_ID)
+        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_alarm)
             .setColor(0xFF4F46E5.toInt())
             .setContentTitle(title)
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
-            .setCategory(NotificationCompat.CATEGORY_ALARM)
-            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setCategory(
+                if (activeAlarm) NotificationCompat.CATEGORY_ALARM
+                else NotificationCompat.CATEGORY_REMINDER
+            )
+            .setPriority(
+                if (activeAlarm) NotificationCompat.PRIORITY_MAX
+                else NotificationCompat.PRIORITY_HIGH
+            )
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setOngoing(true)
-            .setAutoCancel(false)
+            .setOngoing(activeAlarm)
+            .setAutoCancel(!activeAlarm)
             .setOnlyAlertOnce(true)
-            .setContentIntent(fullScreenPendingIntent)
-            .setFullScreenIntent(fullScreenPendingIntent, true)
+            .setContentIntent(screenPendingIntent)
             .setSilent(true)
             .addAction(
                 R.drawable.ic_alarm,
-                "إيقاف فورًا",
+                if (activeAlarm) "إيقاف فورًا" else "إغلاق",
                 actionPendingIntent(
                     context,
                     AlarmActionReceiver.ACTION_STOP,
@@ -109,7 +151,11 @@ object AlarmNotification {
                     3_202
                 )
             )
-            .build()
+
+        if (activeAlarm) {
+            builder.setFullScreenIntent(screenPendingIntent, true)
+        }
+        return builder.build()
     }
 
     fun post(
@@ -118,6 +164,31 @@ object AlarmNotification {
         title: String,
         notes: String,
         kind: String
+    ): Boolean = notifySafely(
+        context,
+        build(context, taskId, title, notes, kind),
+        event = "NOTIFICATION_POSTED_DIRECTLY",
+        details = "kind=$kind task=$taskId"
+    )
+
+    fun postVisualReminder(
+        context: Context,
+        taskId: String,
+        title: String,
+        notes: String,
+        kind: String
+    ): Boolean = notifySafely(
+        context,
+        buildVisualReminder(context, taskId, title, notes, kind),
+        event = "VISUAL_REMINDER_POSTED",
+        details = "kind=$kind task=$taskId"
+    )
+
+    private fun notifySafely(
+        context: Context,
+        notification: Notification,
+        event: String,
+        details: String
     ): Boolean {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(
@@ -136,11 +207,8 @@ object AlarmNotification {
         }
 
         return runCatching {
-            manager.notify(
-                NOTIFICATION_ID,
-                build(context, taskId, title, notes, kind)
-            )
-            AppLog.write(context, "NOTIFICATION_POSTED_DIRECTLY", "kind=$kind task=$taskId")
+            manager.notify(NOTIFICATION_ID, notification)
+            AppLog.write(context, event, details)
             true
         }.getOrElse { error ->
             AppLog.write(
