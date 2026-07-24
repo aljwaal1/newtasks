@@ -69,7 +69,7 @@ class AlarmService : Service() {
                     "${error.javaClass.simpleName}: ${error.message}"
                 )
             }
-        scheduleAutomaticServiceRelease(kind, taskId)
+        scheduleAutomaticServiceRelease(taskId, title, notes, kind)
 
         if (launchScreen) {
             val launched = AlarmActivityLauncher.launch(
@@ -88,17 +88,29 @@ class AlarmService : Service() {
         return START_NOT_STICKY
     }
 
-    private fun scheduleAutomaticServiceRelease(kind: String, taskId: String) {
+    private fun scheduleAutomaticServiceRelease(
+        taskId: String,
+        title: String,
+        notes: String,
+        kind: String
+    ) {
         timeoutRunnable?.let(timeoutHandler::removeCallbacks)
         val delayMillis = AlarmPlayer.maxDurationMillis(this) + 750L
         val runnable = Runnable {
             AlarmPlayer.stop(this)
             @Suppress("DEPRECATION")
-            stopForeground(false)
+            stopForeground(true)
+            AlarmNotification.postVisualReminder(
+                context = this,
+                taskId = taskId,
+                title = title,
+                notes = notes,
+                kind = kind
+            )
             AppLog.write(
                 this,
                 "ALARM_SERVICE_AUTO_RELEASED",
-                "kind=$kind task=$taskId delay=$delayMillis notificationRetained=true"
+                "kind=$kind task=$taskId delay=$delayMillis visualReminder=true"
             )
             stopSelf()
         }
