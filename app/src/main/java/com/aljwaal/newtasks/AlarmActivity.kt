@@ -65,7 +65,7 @@ class AlarmActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         configureAlarmWindow()
         readIntent(intent)
-        ensureAlarmService()
+        ensureAlarmServiceOnlyWhenMissing()
         AppLog.write(this, "ALARM_ACTIVITY_OPENED", "task=$taskId title=$alarmTitle")
         render()
     }
@@ -74,7 +74,7 @@ class AlarmActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         readIntent(intent)
-        ensureAlarmService()
+        ensureAlarmServiceOnlyWhenMissing()
         AppLog.write(this, "ALARM_ACTIVITY_NEW_INTENT", "task=$taskId title=$alarmTitle")
     }
 
@@ -95,10 +95,10 @@ class AlarmActivity : ComponentActivity() {
                     AlarmScreen(
                         title = alarmTitle,
                         notes = alarmNotes,
+                        onStopAlarm = ::stopAlarm,
                         onDone = ::complete,
                         onSnooze5 = { snooze(5) },
-                        onSnooze10 = { snooze(10) },
-                        onStopSound = { AlarmPlayer.stop(this) }
+                        onSnooze10 = { snooze(10) }
                     )
                 }
             }
@@ -135,7 +135,11 @@ class AlarmActivity : ComponentActivity() {
             ?: AlarmScheduler.KIND_TEST
     }
 
-    private fun ensureAlarmService() {
+    private fun ensureAlarmServiceOnlyWhenMissing() {
+        if (AlarmService.isRunning()) {
+            AppLog.write(this, "ALARM_ACTIVITY_SERVICE_START_SKIPPED", "alreadyRunning=true")
+            return
+        }
         runCatching {
             AlarmService.start(
                 context = this,
@@ -152,6 +156,12 @@ class AlarmActivity : ComponentActivity() {
                 "${error.javaClass.simpleName}: ${error.message}"
             )
         }
+    }
+
+    private fun stopAlarm() {
+        AlarmService.stop(this)
+        AppLog.write(this, "ALARM_STOPPED_FROM_SCREEN", "task=$taskId")
+        finishAndRemoveTask()
     }
 
     private fun complete() {
@@ -211,12 +221,12 @@ class AlarmActivity : ComponentActivity() {
 private fun AlarmScreen(
     title: String,
     notes: String,
+    onStopAlarm: () -> Unit,
     onDone: () -> Unit,
     onSnooze5: () -> Unit,
-    onSnooze10: () -> Unit,
-    onStopSound: () -> Unit
+    onSnooze10: () -> Unit
 ) {
-    BackHandler(enabled = true) { }
+    BackHandler(enabled = true) { onStopAlarm() }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
         while (currentCoroutineContext().isActive) {
@@ -227,7 +237,7 @@ private fun AlarmScreen(
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Box(
-            modifier = Modifier.fillMaxSize().padding(20.dp),
+            modifier = Modifier.fillMaxSize().padding(18.dp),
             contentAlignment = Alignment.Center
         ) {
             Column(
@@ -237,49 +247,50 @@ private fun AlarmScreen(
             ) {
                 Box(
                     modifier = Modifier
-                        .background(Color(0xFFE0E7FF), RoundedCornerShape(30.dp))
-                        .padding(24.dp),
+                        .background(Color(0xFFE0E7FF), RoundedCornerShape(26.dp))
+                        .padding(20.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(Icons.Default.Alarm, null, tint = Color(0xFF4338CA))
                 }
-                Spacer(Modifier.height(18.dp))
+                Spacer(Modifier.height(12.dp))
                 Text("تنبيه مهمة", color = Color(0xFF64748B), fontWeight = FontWeight.SemiBold)
                 Text(
                     NumberFormatUtils.formatTime(now),
-                    fontSize = 66.sp,
+                    fontSize = 58.sp,
                     fontWeight = FontWeight.Black,
                     color = Color(0xFF0F172A)
                 )
                 Text(NumberFormatUtils.formatWeekdayDate(now), color = Color(0xFF64748B))
-                Spacer(Modifier.height(20.dp))
+                Spacer(Modifier.height(14.dp))
                 AlarmContent(title, notes)
-                Spacer(Modifier.height(22.dp))
+                Spacer(Modifier.height(16.dp))
+                Button(
+                    onClick = onStopAlarm,
+                    modifier = Modifier.fillMaxWidth().height(64.dp),
+                    shape = RoundedCornerShape(18.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626))
+                ) {
+                    Icon(Icons.Default.VolumeOff, null)
+                    Text("  إيقاف التنبيه فورًا", fontSize = 19.sp, fontWeight = FontWeight.Bold)
+                }
+                Spacer(Modifier.height(8.dp))
                 Button(
                     onClick = onDone,
-                    modifier = Modifier.fillMaxWidth().height(58.dp),
-                    shape = RoundedCornerShape(18.dp),
+                    modifier = Modifier.fillMaxWidth().height(54.dp),
+                    shape = RoundedCornerShape(16.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F766E))
                 ) {
                     Icon(Icons.Default.CheckCircle, null)
-                    Text("  تم الإنجاز", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text("  تم الإنجاز", fontSize = 17.sp, fontWeight = FontWeight.Bold)
                 }
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(8.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     SnoozeButton("5 دقائق", onSnooze5, Modifier.weight(1f))
                     SnoozeButton("10 دقائق", onSnooze10, Modifier.weight(1f))
-                }
-                Spacer(Modifier.height(8.dp))
-                OutlinedButton(
-                    onClick = onStopSound,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Icon(Icons.Default.VolumeOff, null)
-                    Text("  إيقاف الصوت فقط")
                 }
             }
         }
@@ -291,25 +302,26 @@ private fun AlarmContent(title: String, notes: String) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color.White, RoundedCornerShape(24.dp))
-            .padding(22.dp),
+            .background(Color.White, RoundedCornerShape(22.dp))
+            .padding(18.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
             title,
             textAlign = TextAlign.Center,
-            fontSize = 25.sp,
-            lineHeight = 34.sp,
+            fontSize = 23.sp,
+            lineHeight = 30.sp,
             fontWeight = FontWeight.Bold,
             color = Color(0xFF0F172A)
         )
         if (notes.isNotBlank()) {
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(7.dp))
             Text(
                 notes,
                 textAlign = TextAlign.Center,
                 color = Color(0xFF64748B),
-                lineHeight = 24.sp
+                lineHeight = 21.sp,
+                maxLines = 3
             )
         }
     }
@@ -323,8 +335,8 @@ private fun SnoozeButton(
 ) {
     OutlinedButton(
         onClick = onClick,
-        modifier = modifier.height(54.dp),
-        shape = RoundedCornerShape(16.dp)
+        modifier = modifier.height(50.dp),
+        shape = RoundedCornerShape(15.dp)
     ) {
         Icon(Icons.Default.Snooze, null)
         Text("  $label")
