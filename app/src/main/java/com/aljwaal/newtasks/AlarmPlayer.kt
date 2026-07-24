@@ -15,7 +15,7 @@ import androidx.annotation.RequiresApi
 
 /**
  * مشغل تنبيه واحد وآمن لكل التطبيق.
- * لا يستخدم نغمة منبه الهاتف ولا يسمح باستمرار الصوت دون حد زمني.
+ * لا يستخدم نغمة منبه الهاتف ولا يسمح باستمرار الصوت أو الاهتزاز دون حد زمني.
  */
 object AlarmPlayer {
     private val lock = Any()
@@ -29,6 +29,15 @@ object AlarmPlayer {
     private var active = false
     private var sessionId = 0L
 
+    fun maxDurationMillis(context: Context): Long =
+        maxDurationMillis(AppPreferences.alarmSoundMode(context.applicationContext))
+
+    private fun maxDurationMillis(mode: AlarmSoundMode): Long = when (mode) {
+        AlarmSoundMode.VIBRATE_ONLY -> 10_000L
+        AlarmSoundMode.GENTLE_ONCE -> 3_000L
+        AlarmSoundMode.NORMAL_ALARM -> 30_000L
+    }
+
     fun start(context: Context) = synchronized(lock) {
         if (active) {
             AppLog.write(context, "ALARM_PLAYER_ALREADY_RUNNING", "session=$sessionId")
@@ -41,33 +50,61 @@ object AlarmPlayer {
         sessionId++
         val currentSession = sessionId
 
-        startVibration(appContext, mode)
-        when (mode) {
-            AlarmSoundMode.VIBRATE_ONLY -> {
-                AppLog.write(appContext, "ALARM_ALERT_STARTED", "mode=vibrate_only")
-                scheduleAutoStop(appContext, currentSession, 10_000L)
-            }
+        runCatching {
+            startVibration(appContext, mode)
+            when (mode) {
+                AlarmSoundMode.VIBRATE_ONLY -> {
+                    AppLog.write(appContext, "ALARM_ALERT_STARTED", "mode=vibrate_only")
+                }
 
-            AlarmSoundMode.GENTLE_ONCE -> {
-                requestAudioFocus(appContext, AudioManager.STREAM_NOTIFICATION, alarmUsage = false)
-                toneGenerator = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 35)
-                handler.post {
-                    synchronized(lock) {
-                        if (active && sessionId == currentSession) {
-                            toneGenerator?.startTone(ToneGenerator.TONE_PROP_BEEP2, 900)
-                            AppLog.write(appContext, "SOUND_STARTED", "mode=gentle_once duration=900")
+                AlarmSoundMode.GENTLE_ONCE -> {
+                    requestAudioFocus(
+                        appContext,
+                        AudioManager.STREAM_NOTIFICATION,
+                        alarmUsage = false
+                    )
+                    toneGenerator = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 35)
+                    handler.post {
+                        synchronized(lock) {
+                            if (active && sessionId == currentSession) {
+                                toneGenerator?.startTone(ToneGenerator.TONE_PROP_BEEP2, 900)
+                                AppLog.write(
+                                    appContext,
+                                    "SOUND_STARTED",
+                                    "mode=gentle_once duration=900"
+                                )
+                            }
                         }
                     }
                 }
-                scheduleAutoStop(appContext, currentSession, 3_000L)
-            }
 
-            AlarmSoundMode.NORMAL_ALARM -> {
-                requestAudioFocus(appContext, AudioManager.STREAM_ALARM, alarmUsage = true)
-                toneGenerator = ToneGenerator(AudioManager.STREAM_ALARM, 65)
-                scheduleNormalTone(appContext, currentSession)
-                scheduleAutoStop(appContext, currentSession, 30_000L)
+                AlarmSoundMode.NORMAL_ALARM -> {
+                    requestAudioFocus(
+                        appContext,
+                        AudioManager.STREAM_ALARM,
+                        alarmUsage = true
+                    )
+                    toneGenerator = ToneGenerator(AudioManager.STREAM_ALARM, 65)
+                    scheduleNormalTone(appContext, currentSession)
+                }
             }
+            scheduleAutoStop(
+                appContext,
+                currentSession,
+                maxDurationMillis(mode)
+            )
+            AppLog.write(
+                appContext,
+                "ALARM_ALERT_MODE_STARTED",
+                "mode=${mode.storageValue} maxDuration=${maxDurationMillis(mode)}"
+            )
+        }.onFailure { error ->
+            AppLog.write(
+                appContext,
+                "ALARM_PLAYER_START_FAILED",
+                "${error.javaClass.simpleName}: ${error.message}"
+            )
+            stopLocked(appContext, reason = "start_failure")
         }
     }
 
@@ -77,7 +114,10 @@ object AlarmPlayer {
                 synchronized(lock) {
                     if (!active || sessionId != currentSession) return
                     runCatching {
-                        toneGenerator?.startTone(ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 1_000)
+                        toneGenerator?.startTone(
+                            ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD,
+                            1_000
+                        )
                     }.onFailure { error ->
                         AppLog.write(context, "SOUND_START_FAILED", error.message.orEmpty())
                     }
@@ -89,7 +129,11 @@ object AlarmPlayer {
         handler.post(cycle)
     }
 
-    private fun scheduleAutoStop(context: Context, currentSession: Long, delayMillis: Long) {
+    private fun scheduleAutoStop(
+        context: Context,
+        currentSession: Long,
+        delayMillis: Long
+    ) {
         handler.postDelayed({
             synchronized(lock) {
                 if (active && sessionId == currentSession) {
@@ -100,39 +144,35 @@ object AlarmPlayer {
     }
 
     private fun startVibration(context: Context, mode: AlarmSoundMode) {
-        runCatching {
-            vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                Api31.vibrator(context)
-            } else {
-                @Suppress("DEPRECATION")
-                context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
-            }
-
-            val pattern = when (mode) {
-                AlarmSoundMode.VIBRATE_ONLY -> longArrayOf(0, 500, 350, 500, 800)
-                AlarmSoundMode.GENTLE_ONCE -> longArrayOf(0, 250, 120, 250)
-                AlarmSoundMode.NORMAL_ALARM -> longArrayOf(0, 600, 300, 600, 500)
-            }
-            val repeat = when (mode) {
-                AlarmSoundMode.GENTLE_ONCE -> -1
-                AlarmSoundMode.VIBRATE_ONLY,
-                AlarmSoundMode.NORMAL_ALARM -> 0
-            }
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                Api26.vibrate(vibrator, pattern, repeat)
-            } else {
-                @Suppress("DEPRECATION")
-                vibrator?.vibrate(pattern, repeat)
-            }
-            AppLog.write(
-                context,
-                "VIBRATION_STARTED",
-                "mode=${mode.storageValue} repeat=$repeat legacy=${Build.VERSION.SDK_INT < 26}"
-            )
-        }.onFailure { error ->
-            AppLog.write(context, "VIBRATION_START_FAILED", error.message.orEmpty())
+        vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            Api31.vibrator(context)
+        } else {
+            @Suppress("DEPRECATION")
+            context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
         }
+
+        val pattern = when (mode) {
+            AlarmSoundMode.VIBRATE_ONLY -> longArrayOf(0, 500, 350, 500, 800)
+            AlarmSoundMode.GENTLE_ONCE -> longArrayOf(0, 250, 120, 250)
+            AlarmSoundMode.NORMAL_ALARM -> longArrayOf(0, 600, 300, 600, 500)
+        }
+        val repeat = when (mode) {
+            AlarmSoundMode.GENTLE_ONCE -> -1
+            AlarmSoundMode.VIBRATE_ONLY,
+            AlarmSoundMode.NORMAL_ALARM -> 0
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Api26.vibrate(vibrator, pattern, repeat)
+        } else {
+            @Suppress("DEPRECATION")
+            vibrator?.vibrate(pattern, repeat)
+        }
+        AppLog.write(
+            context,
+            "VIBRATION_STARTED",
+            "mode=${mode.storageValue} repeat=$repeat legacy=${Build.VERSION.SDK_INT < 26}"
+        )
     }
 
     private fun requestAudioFocus(context: Context, stream: Int, alarmUsage: Boolean) {
