@@ -50,5 +50,5 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: smart-tasks-universal-android5plus-v1.2.1
+          name: smart-tasks-universal-android5plus-v1.3.0
           path: app/build/outputs/apk/debug/app-debug.apk
