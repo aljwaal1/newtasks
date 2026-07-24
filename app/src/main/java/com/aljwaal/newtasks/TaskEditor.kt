@@ -1,6 +1,5 @@
 package com.aljwaal.newtasks
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -52,6 +51,7 @@ import java.util.Calendar
 fun TaskEditorDialog(
     existing: TaskItem?,
     categories: List<String>,
+    priorities: List<TaskPriority>,
     onDismiss: () -> Unit,
     onSave: (TaskItem) -> Unit
 ) {
@@ -72,8 +72,12 @@ fun TaskEditorDialog(
     var category by remember(existing) {
         mutableStateOf(existing?.category ?: categories.firstOrNull() ?: "عام")
     }
-    var priority by remember(existing) {
-        mutableStateOf(existing?.priority ?: TaskPriority.NORMAL)
+    var priority by remember(existing, priorities) {
+        mutableStateOf(
+            existing?.priority
+                ?: priorities.firstOrNull { it.id == TaskPriority.NORMAL.id }
+                ?: TaskPriority.NORMAL
+        )
     }
     var repeatRule by remember(existing) {
         mutableStateOf(existing?.repeatRule ?: RepeatRule.NONE)
@@ -111,7 +115,7 @@ fun TaskEditorDialog(
                     color = Color(0xFF0F172A)
                 )
                 Text(
-                    "اختر التاريخ والوقت من القوائم لتجنب أي خطأ.",
+                    "اختر التاريخ، ثم أدخل الساعة والدقائق في خانتين منفصلتين.",
                     color = Color(0xFF64748B),
                     fontSize = 13.sp
                 )
@@ -173,35 +177,15 @@ fun TaskEditorDialog(
                     )
                 }
 
-                Text(
-                    "أوقات سريعة",
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color(0xFF334155)
-                )
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    listOf(9 to 0, 14 to 0, 18 to 0, 21 to 0).forEach { (hour, minute) ->
-                        QuickDateButton(
-                            "${NumberFormatUtils.twoDigits(hour)}:${NumberFormatUtils.twoDigits(minute)}"
-                        ) {
-                            dueAt = setTime(dueAt, hour, minute)
-                        }
-                    }
-                }
-
                 SelectorField("التصنيف", category, categories) {
                     category = NumberFormatUtils.latinDigits(it)
                 }
                 SelectorField(
-                    "الأولوية",
-                    priority.label,
-                    TaskPriority.entries.map { it.label }
+                    label = "الأولوية",
+                    value = priority.label,
+                    options = priorities.map { it.label }
                 ) { label ->
-                    priority = TaskPriority.entries.first { it.label == label }
+                    priority = priorities.firstOrNull { it.label == label } ?: TaskPriority.NORMAL
                 }
                 SelectorField(
                     "التكرار",
@@ -222,7 +206,7 @@ fun TaskEditorDialog(
                         Column(modifier = Modifier.weight(1f)) {
                             Text("تفعيل التنبيه", fontWeight = FontWeight.Bold)
                             Text(
-                                "إظهار شاشة تنبيه مع صوت واهتزاز",
+                                "إظهار تنبيه بصري وصوتي في الموعد",
                                 color = Color(0xFF64748B),
                                 fontSize = 12.sp
                             )
