@@ -55,7 +55,9 @@ internal fun SafeDatePickerDialog(
     onDismiss: () -> Unit,
     onConfirm: (Int, Int, Int) -> Unit
 ) {
-    val initial = remember(initialMillis) { Calendar.getInstance().apply { timeInMillis = initialMillis } }
+    val initial = remember(initialMillis) {
+        Calendar.getInstance().apply { timeInMillis = initialMillis }
+    }
     var year by remember { mutableIntStateOf(initial.get(Calendar.YEAR)) }
     var month by remember { mutableIntStateOf(initial.get(Calendar.MONTH)) }
     var selectedDay by remember { mutableIntStateOf(initial.get(Calendar.DAY_OF_MONTH)) }
@@ -73,12 +75,19 @@ internal fun SafeDatePickerDialog(
         Surface(shape = RoundedCornerShape(26.dp), color = Color.White) {
             Column(modifier = Modifier.padding(18.dp)) {
                 Text("اختر التاريخ", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                Text("الأرقام تظهر دائمًا بصيغة 0 1 2 3", color = Color(0xFF64748B), fontSize = 12.sp)
+                Text(
+                    "الأرقام تظهر دائمًا بصيغة 0 1 2 3",
+                    color = Color(0xFF64748B),
+                    fontSize = 12.sp
+                )
                 Spacer(Modifier.height(14.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     TextButton(onClick = {
                         month--
-                        if (month < 0) { month = 11; year-- }
+                        if (month < 0) {
+                            month = 11
+                            year--
+                        }
                     }) { Icon(Icons.Default.ArrowForward, null) }
                     Text(
                         NumberFormatUtils.monthTitle(year, month),
@@ -89,7 +98,10 @@ internal fun SafeDatePickerDialog(
                     )
                     TextButton(onClick = {
                         month++
-                        if (month > 11) { month = 0; year++ }
+                        if (month > 11) {
+                            month = 0
+                            year++
+                        }
                     }) { Icon(Icons.Default.ArrowBack, null) }
                 }
                 Row(modifier = Modifier.fillMaxWidth()) {
@@ -158,7 +170,9 @@ internal fun SafeTimePickerDialog(
     onDismiss: () -> Unit,
     onConfirm: (Int, Int) -> Unit
 ) {
-    val initial = remember(initialMillis) { Calendar.getInstance().apply { timeInMillis = initialMillis } }
+    val initial = remember(initialMillis) {
+        Calendar.getInstance().apply { timeInMillis = initialMillis }
+    }
     var hourText by remember(initialMillis) {
         mutableStateOf(NumberFormatUtils.twoDigits(initial.get(Calendar.HOUR_OF_DAY)))
     }
@@ -177,7 +191,7 @@ internal fun SafeTimePickerDialog(
             Column(modifier = Modifier.padding(20.dp)) {
                 Text("إدخال الوقت", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 Text(
-                    "أدخل الساعة والدقائق كل واحدة في خانة مستقلة.",
+                    "الدقائق أولًا بصريًا، ثم الساعة، مع عرض الوقت النهائي بصيغة الساعة:الدقائق.",
                     color = Color(0xFF64748B),
                     fontSize = 12.sp
                 )
@@ -187,6 +201,34 @@ internal fun SafeTimePickerDialog(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
+                    OutlinedTextField(
+                        value = minuteText,
+                        onValueChange = { minuteText = sanitizeTimePart(it) },
+                        modifier = Modifier
+                            .weight(1f)
+                            .focusRequester(minuteFocus)
+                            .onFocusChanged { state ->
+                                if (!state.isFocused && minuteValid) {
+                                    minuteText = NumberFormatUtils.twoDigits(minute!!)
+                                }
+                            },
+                        label = { Text("الدقائق") },
+                        placeholder = { Text("00") },
+                        singleLine = true,
+                        isError = minuteText.isNotEmpty() && !minuteValid,
+                        supportingText = {
+                            Text(
+                                if (minuteValid || minuteText.isEmpty()) "00–59"
+                                else "دقائق غير صحيحة"
+                            )
+                        },
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Number,
+                            imeAction = ImeAction.Done
+                        ),
+                        shape = RoundedCornerShape(16.dp)
+                    )
+                    Text(":", fontSize = 30.sp, fontWeight = FontWeight.Bold)
                     OutlinedTextField(
                         value = hourText,
                         onValueChange = { input ->
@@ -207,37 +249,17 @@ internal fun SafeTimePickerDialog(
                         singleLine = true,
                         isError = hourText.isNotEmpty() && !hourValid,
                         supportingText = {
-                            Text(if (hourValid || hourText.isEmpty()) "من 00 إلى 23" else "ساعة غير صحيحة")
+                            Text(
+                                if (hourValid || hourText.isEmpty()) "00–23"
+                                else "ساعة غير صحيحة"
+                            )
                         },
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Number,
                             imeAction = ImeAction.Next
                         ),
-                        keyboardActions = KeyboardActions(onNext = { minuteFocus.requestFocus() }),
-                        shape = RoundedCornerShape(16.dp)
-                    )
-                    Text(":", fontSize = 30.sp, fontWeight = FontWeight.Bold)
-                    OutlinedTextField(
-                        value = minuteText,
-                        onValueChange = { minuteText = sanitizeTimePart(it) },
-                        modifier = Modifier
-                            .weight(1f)
-                            .focusRequester(minuteFocus)
-                            .onFocusChanged { state ->
-                                if (!state.isFocused && minuteValid) {
-                                    minuteText = NumberFormatUtils.twoDigits(minute!!)
-                                }
-                            },
-                        label = { Text("الدقائق") },
-                        placeholder = { Text("00") },
-                        singleLine = true,
-                        isError = minuteText.isNotEmpty() && !minuteValid,
-                        supportingText = {
-                            Text(if (minuteValid || minuteText.isEmpty()) "من 00 إلى 59" else "دقائق غير صحيحة")
-                        },
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Number,
-                            imeAction = ImeAction.Done
+                        keyboardActions = KeyboardActions(
+                            onNext = { minuteFocus.requestFocus() }
                         ),
                         shape = RoundedCornerShape(16.dp)
                     )
@@ -294,10 +316,11 @@ internal fun setRelativeDate(baseMillis: Long, daysFromToday: Int): Long {
     }.timeInMillis
 }
 
-internal fun setTime(baseMillis: Long, hour: Int, minute: Int): Long = Calendar.getInstance().apply {
-    timeInMillis = baseMillis
-    set(Calendar.HOUR_OF_DAY, hour)
-    set(Calendar.MINUTE, minute)
-    set(Calendar.SECOND, 0)
-    set(Calendar.MILLISECOND, 0)
-}.timeInMillis
+internal fun setTime(baseMillis: Long, hour: Int, minute: Int): Long =
+    Calendar.getInstance().apply {
+        timeInMillis = baseMillis
+        set(Calendar.HOUR_OF_DAY, hour)
+        set(Calendar.MINUTE, minute)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
