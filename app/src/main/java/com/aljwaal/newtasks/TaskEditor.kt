@@ -486,23 +486,3 @@ private fun SelectorField(
         }
     }
 }
-
-private fun setRelativeDate(sourceMillis: Long, days: Int): Long {
-    val source = Calendar.getInstance().apply { timeInMillis = sourceMillis }
-    return Calendar.getInstance().apply {
-        add(Calendar.DAY_OF_YEAR, days)
-        set(Calendar.HOUR_OF_DAY, source.get(Calendar.HOUR_OF_DAY))
-        set(Calendar.MINUTE, source.get(Calendar.MINUTE))
-        set(Calendar.SECOND, 0)
-        set(Calendar.MILLISECOND, 0)
-    }.timeInMillis
-}
-
-private fun setTime(sourceMillis: Long, hour: Int, minute: Int): Long =
-    Calendar.getInstance().apply {
-        timeInMillis = sourceMillis
-        set(Calendar.HOUR_OF_DAY, hour)
-        set(Calendar.MINUTE, minute)
-        set(Calendar.SECOND, 0)
-        set(Calendar.MILLISECOND, 0)
-    }.timeInMillis
