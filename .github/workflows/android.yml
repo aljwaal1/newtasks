@@ -17,7 +17,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.13'
-      - name: Lint and build debug APK
+      - name: Lint and build universal debug APK
         shell: bash
         run: |
           set +e
@@ -30,6 +30,8 @@ jobs:
           fi
           echo "===== ANDROID CHECK SUCCESS — LAST 60 LINES ====="
           tail -n 60 gradle-build.log
+          echo "===== APK CONTENTS: NATIVE LIBRARIES ====="
+          unzip -l app/build/outputs/apk/debug/app-debug.apk | grep ' lib/' || echo "No native libraries: APK bytecode is architecture-independent"
       - name: Upload build log
         if: always()
         uses: actions/upload-artifact@v4
@@ -48,5 +50,5 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: smart-tasks-android-5-plus-v1.2.0
+          name: smart-tasks-universal-android5plus-v1.2.1
           path: app/build/outputs/apk/debug/app-debug.apk
