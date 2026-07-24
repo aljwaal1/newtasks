@@ -1,7 +1,6 @@
 package com.aljwaal.newtasks
 
 import android.os.Build
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,12 +23,18 @@ import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.ImportExport
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PriorityHigh
 import androidx.compose.material.icons.filled.Restore
+import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -63,6 +68,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+private enum class SettingsSection {
+    ALERTS,
+    PERMISSIONS,
+    ORGANIZATION,
+    DATA
+}
+
 @Composable
 internal fun CompactSettingsDialog(
     refreshTick: Int,
@@ -85,6 +97,7 @@ internal fun CompactSettingsDialog(
     val context = LocalContext.current
     var mode by remember { mutableStateOf(AppPreferences.alarmSoundMode(context)) }
     var permissions by remember { mutableStateOf(PermissionInspector.snapshot(context)) }
+    var activeSection by remember { mutableStateOf<SettingsSection?>(SettingsSection.ALERTS) }
     var showCategories by remember { mutableStateOf(false) }
     var showPriorities by remember { mutableStateOf(false) }
 
@@ -98,147 +111,96 @@ internal fun CompactSettingsDialog(
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Surface(
-            modifier = Modifier.fillMaxSize().padding(8.dp),
-            shape = RoundedCornerShape(24.dp),
+            modifier = Modifier.fillMaxSize().padding(10.dp),
+            shape = RoundedCornerShape(26.dp),
             color = Color(0xFFF8FAFC)
         ) {
             Column(
-                modifier = Modifier.fillMaxSize().padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(7.dp)
+                modifier = Modifier.fillMaxSize().padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("الإعدادات", fontSize = 21.sp, fontWeight = FontWeight.Bold)
-                        Text(
-                            "كل الإعدادات الأساسية في نافذة واحدة",
-                            color = Color(0xFF64748B),
-                            fontSize = 11.sp
+                SettingsHeader(onDismiss)
+
+                SettingsSectionCard(
+                    icon = Icons.Default.Notifications,
+                    title = "التنبيه والصوت",
+                    description = "الصوت والاهتزاز واختبار التنبيه",
+                    expanded = activeSection == SettingsSection.ALERTS,
+                    onClick = {
+                        activeSection = toggleSection(activeSection, SettingsSection.ALERTS)
+                    }
+                ) {
+                    AlarmSettingsContent(
+                        mode = mode,
+                        onMode = {
+                            mode = it
+                            AppPreferences.saveAlarmSoundMode(context, it)
+                        },
+                        onTestNow = onTestNow,
+                        onTestAfter30 = onTestAfter30
+                    )
+                }
+
+                SettingsSectionCard(
+                    icon = Icons.Default.Security,
+                    title = "الصلاحيات",
+                    description = "الإشعارات والمنبه الدقيق والبطارية",
+                    expanded = activeSection == SettingsSection.PERMISSIONS,
+                    onClick = {
+                        activeSection = toggleSection(activeSection, SettingsSection.PERMISSIONS)
+                    }
+                ) {
+                    PermissionsContent(
+                        permissions = permissions,
+                        onRequestNotifications = onRequestNotifications,
+                        onOpenExactAlarmSettings = onOpenExactAlarmSettings,
+                        onOpenFullScreenSettings = onOpenFullScreenSettings,
+                        onOpenNotificationSettings = onOpenNotificationSettings,
+                        onOpenBatterySettings = onOpenBatterySettings
+                    )
+                }
+
+                SettingsSectionCard(
+                    icon = Icons.Default.Tune,
+                    title = "التنظيم",
+                    description = "التصنيفات والأولويات",
+                    expanded = activeSection == SettingsSection.ORGANIZATION,
+                    onClick = {
+                        activeSection = toggleSection(activeSection, SettingsSection.ORGANIZATION)
+                    }
+                ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        CompactAction(
+                            Icons.Default.Category,
+                            "التصنيفات",
+                            { showCategories = true },
+                            Modifier.weight(1f)
+                        )
+                        CompactAction(
+                            Icons.Default.PriorityHigh,
+                            "الأولويات",
+                            { showPriorities = true },
+                            Modifier.weight(1f)
                         )
                     }
-                    IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, "إغلاق")
+                }
+
+                SettingsSectionCard(
+                    icon = Icons.Default.Storage,
+                    title = "البيانات والسجل",
+                    description = "النسخ الاحتياطي والاستيراد والتشخيص",
+                    expanded = activeSection == SettingsSection.DATA,
+                    onClick = {
+                        activeSection = toggleSection(activeSection, SettingsSection.DATA)
                     }
-                }
-
-                Text("طريقة التنبيه", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                AlarmSoundMode.entries.forEach { item ->
-                    SoundModeRow(
-                        mode = item,
-                        selected = mode == item,
-                        onClick = {
-                            mode = item
-                            AppPreferences.saveAlarmSoundMode(context, item)
-                        }
-                    )
-                }
-
-                Text("الصلاحيات", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(5.dp)
                 ) {
-                    PermissionTile(
-                        "إشعار",
-                        permissions.notifications,
-                        if (Build.VERSION.SDK_INT >= 33 && !permissions.notifications) {
-                            onRequestNotifications
-                        } else {
-                            onOpenNotificationSettings
-                        },
-                        Modifier.weight(1f)
-                    )
-                    PermissionTile(
-                        "دقيق",
-                        permissions.exactAlarms,
-                        onOpenExactAlarmSettings,
-                        Modifier.weight(1f)
-                    )
-                    PermissionTile(
-                        "منبثق",
-                        permissions.fullScreen,
-                        onOpenFullScreenSettings,
-                        Modifier.weight(1f)
-                    )
-                    PermissionTile(
-                        "بطارية",
-                        permissions.batteryUnrestricted,
-                        onOpenBatterySettings,
-                        Modifier.weight(1f)
-                    )
-                }
-
-                Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                    CompactAction(
-                        Icons.Default.Alarm,
-                        "اختبار الآن",
-                        onTestNow,
-                        Modifier.weight(1f),
-                        primary = true
-                    )
-                    CompactAction(
-                        Icons.Default.Timer,
-                        "بعد 30 ثانية",
-                        onTestAfter30,
-                        Modifier.weight(1f)
-                    )
-                }
-
-                Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                    CompactAction(
-                        Icons.Default.Category,
-                        "التصنيفات",
-                        { showCategories = true },
-                        Modifier.weight(1f)
-                    )
-                    CompactAction(
-                        Icons.Default.PriorityHigh,
-                        "الأولويات",
-                        { showPriorities = true },
-                        Modifier.weight(1f)
-                    )
-                }
-
-                Text("البيانات", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                    CompactAction(
-                        Icons.Default.Backup,
-                        "نسخة محلية",
-                        onCreateLocalBackup,
-                        Modifier.weight(1f)
-                    )
-                    CompactAction(
-                        Icons.Default.Restore,
-                        "استعادة",
-                        onRestoreLocalBackup,
-                        Modifier.weight(1f)
-                    )
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                    CompactAction(
-                        Icons.Default.Share,
-                        "مشاركة JSON",
-                        onShareBackup,
-                        Modifier.weight(1f)
-                    )
-                    CompactAction(
-                        Icons.Default.ImportExport,
-                        "استيراد",
-                        onImportBackup,
-                        Modifier.weight(1f)
-                    )
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                    CompactAction(
-                        Icons.Default.Share,
-                        "مشاركة السجل",
-                        onShareLog,
-                        Modifier.weight(1f)
-                    )
-                    CompactAction(
-                        Icons.Default.Delete,
-                        "مسح السجل",
-                        onClearLog,
-                        Modifier.weight(1f)
+                    DataSettingsContent(
+                        onShareBackup = onShareBackup,
+                        onImportBackup = onImportBackup,
+                        onCreateLocalBackup = onCreateLocalBackup,
+                        onRestoreLocalBackup = onRestoreLocalBackup,
+                        onShareLog = onShareLog,
+                        onClearLog = onClearLog
                     )
                 }
 
@@ -267,6 +229,231 @@ internal fun CompactSettingsDialog(
     }
 }
 
+private fun toggleSection(
+    current: SettingsSection?,
+    requested: SettingsSection
+): SettingsSection? = if (current == requested) null else requested
+
+@Composable
+private fun SettingsHeader(onDismiss: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Surface(
+            modifier = Modifier.size(45.dp),
+            shape = RoundedCornerShape(15.dp),
+            color = Color(0xFFE0E7FF)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(Icons.Default.Settings, null, tint = Color(0xFF4338CA))
+            }
+        }
+        Spacer(Modifier.width(10.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text("الإعدادات", fontSize = 23.sp, fontWeight = FontWeight.Black)
+            Text("اختر القسم الذي تحتاجه فقط", color = Color(0xFF64748B), fontSize = 11.sp)
+        }
+        IconButton(onClick = onDismiss) {
+            Icon(Icons.Default.Close, "إغلاق")
+        }
+    }
+}
+
+@Composable
+private fun SettingsSectionCard(
+    icon: ImageVector,
+    title: String,
+    description: String,
+    expanded: Boolean,
+    onClick: () -> Unit,
+    content: @Composable () -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        color = Color.White,
+        shadowElevation = if (expanded) 2.dp else 0.dp
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(11.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    modifier = Modifier.size(38.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (expanded) Color(0xFFE0E7FF) else Color(0xFFF1F5F9)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            icon,
+                            null,
+                            modifier = Modifier.size(19.dp),
+                            tint = if (expanded) Color(0xFF4338CA) else Color(0xFF64748B)
+                        )
+                    }
+                }
+                Spacer(Modifier.width(9.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(title, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Text(
+                        description,
+                        color = Color(0xFF64748B),
+                        fontSize = 10.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Icon(
+                    if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    null,
+                    tint = Color(0xFF94A3B8)
+                )
+            }
+            if (expanded) {
+                HorizontalDivider(color = Color(0xFFF1F5F9))
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(7.dp)
+                ) {
+                    content()
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AlarmSettingsContent(
+    mode: AlarmSoundMode,
+    onMode: (AlarmSoundMode) -> Unit,
+    onTestNow: () -> Unit,
+    onTestAfter30: () -> Unit
+) {
+    AlarmSoundMode.entries.forEach { item ->
+        SoundModeRow(
+            mode = item,
+            selected = mode == item,
+            onClick = { onMode(item) }
+        )
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        CompactAction(
+            Icons.Default.Alarm,
+            "اختبار الآن",
+            onTestNow,
+            Modifier.weight(1f),
+            primary = true
+        )
+        CompactAction(
+            Icons.Default.Timer,
+            "بعد 30 ثانية",
+            onTestAfter30,
+            Modifier.weight(1f)
+        )
+    }
+}
+
+@Composable
+private fun PermissionsContent(
+    permissions: PermissionSnapshot,
+    onRequestNotifications: () -> Unit,
+    onOpenExactAlarmSettings: () -> Unit,
+    onOpenFullScreenSettings: () -> Unit,
+    onOpenNotificationSettings: () -> Unit,
+    onOpenBatterySettings: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(7.dp)
+    ) {
+        PermissionTile(
+            "الإشعارات",
+            permissions.notifications,
+            if (Build.VERSION.SDK_INT >= 33 && !permissions.notifications) {
+                onRequestNotifications
+            } else {
+                onOpenNotificationSettings
+            },
+            Modifier.weight(1f)
+        )
+        PermissionTile(
+            "المنبه الدقيق",
+            permissions.exactAlarms,
+            onOpenExactAlarmSettings,
+            Modifier.weight(1f)
+        )
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(7.dp)
+    ) {
+        PermissionTile(
+            "الشاشة المنبثقة",
+            permissions.fullScreen,
+            onOpenFullScreenSettings,
+            Modifier.weight(1f)
+        )
+        PermissionTile(
+            "البطارية",
+            permissions.batteryUnrestricted,
+            onOpenBatterySettings,
+            Modifier.weight(1f)
+        )
+    }
+}
+
+@Composable
+private fun DataSettingsContent(
+    onShareBackup: () -> Unit,
+    onImportBackup: () -> Unit,
+    onCreateLocalBackup: () -> Unit,
+    onRestoreLocalBackup: () -> Unit,
+    onShareLog: () -> Unit,
+    onClearLog: () -> Unit
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        CompactAction(
+            Icons.Default.Backup,
+            "نسخة محلية",
+            onCreateLocalBackup,
+            Modifier.weight(1f)
+        )
+        CompactAction(
+            Icons.Default.Restore,
+            "استعادة",
+            onRestoreLocalBackup,
+            Modifier.weight(1f)
+        )
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        CompactAction(
+            Icons.Default.Share,
+            "مشاركة JSON",
+            onShareBackup,
+            Modifier.weight(1f)
+        )
+        CompactAction(
+            Icons.Default.ImportExport,
+            "استيراد",
+            onImportBackup,
+            Modifier.weight(1f)
+        )
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        CompactAction(
+            Icons.Default.Share,
+            "مشاركة السجل",
+            onShareLog,
+            Modifier.weight(1f)
+        )
+        CompactAction(
+            Icons.Default.Delete,
+            "مسح السجل",
+            onClearLog,
+            Modifier.weight(1f)
+        )
+    }
+}
+
 @Composable
 private fun SoundModeRow(
     mode: AlarmSoundMode,
@@ -276,10 +463,10 @@ private fun SoundModeRow(
     Surface(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
         shape = RoundedCornerShape(13.dp),
-        color = if (selected) Color(0xFFEEF2FF) else Color.White
+        color = if (selected) Color(0xFFEEF2FF) else Color(0xFFF8FAFC)
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             RadioButton(selected = selected, onClick = onClick)
@@ -305,21 +492,22 @@ private fun PermissionTile(
     modifier: Modifier
 ) {
     Surface(
-        modifier = modifier.height(50.dp).clickable(onClick = onClick),
-        shape = RoundedCornerShape(12.dp),
+        modifier = modifier.height(54.dp).clickable(onClick = onClick),
+        shape = RoundedCornerShape(13.dp),
         color = if (granted) Color(0xFFDCFCE7) else Color(0xFFFEE2E2)
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+        Row(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 9.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
                 Icons.Default.Notifications,
                 null,
-                modifier = Modifier.size(17.dp),
+                modifier = Modifier.size(18.dp),
                 tint = if (granted) Color(0xFF15803D) else Color(0xFFDC2626)
             )
-            Text(label, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.width(6.dp))
+            Text(label, fontSize = 10.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -335,9 +523,9 @@ private fun CompactAction(
     if (primary) {
         Button(
             onClick = onClick,
-            modifier = modifier.height(40.dp),
+            modifier = modifier.height(42.dp),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 7.dp),
-            shape = RoundedCornerShape(12.dp)
+            shape = RoundedCornerShape(13.dp)
         ) {
             Icon(icon, null, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(4.dp))
@@ -346,9 +534,9 @@ private fun CompactAction(
     } else {
         OutlinedButton(
             onClick = onClick,
-            modifier = modifier.height(40.dp),
+            modifier = modifier.height(42.dp),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 7.dp),
-            shape = RoundedCornerShape(12.dp)
+            shape = RoundedCornerShape(13.dp)
         ) {
             Icon(icon, null, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(4.dp))
@@ -463,7 +651,12 @@ private fun ManageValuesDialog(
         ) {
             Column(modifier = Modifier.fillMaxSize().padding(14.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(title, modifier = Modifier.weight(1f), fontSize = 19.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        title,
+                        modifier = Modifier.weight(1f),
+                        fontSize = 19.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                     IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, null) }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
