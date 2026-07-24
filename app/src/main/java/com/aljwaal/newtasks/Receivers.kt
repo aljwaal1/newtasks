@@ -85,7 +85,7 @@ class AlarmActionReceiver : BroadcastReceiver() {
         val appContext = context.applicationContext
         val copiedIntent = Intent(intent)
 
-        // أوقف الصوت فورًا، ثم نفّذ تحديث البيانات خارج خيط النظام الرئيسي.
+        // جميع الأزرار تبدأ بإيقاف الصوت والاهتزاز والخدمة فورًا.
         AlarmService.stop(appContext)
 
         Thread({
@@ -101,6 +101,8 @@ class AlarmActionReceiver : BroadcastReceiver() {
                 )
 
                 when (copiedIntent.action) {
+                    ACTION_STOP -> Unit
+
                     ACTION_DONE -> {
                         if (taskId.isNotBlank()) {
                             val task = TaskRepository.get(appContext, taskId)
@@ -136,6 +138,7 @@ class AlarmActionReceiver : BroadcastReceiver() {
     }
 
     companion object {
+        const val ACTION_STOP = "com.aljwaal.newtasks.action.STOP"
         const val ACTION_DONE = "com.aljwaal.newtasks.action.DONE"
         const val ACTION_SNOOZE_5 = "com.aljwaal.newtasks.action.SNOOZE_5"
         const val ACTION_SNOOZE_10 = "com.aljwaal.newtasks.action.SNOOZE_10"
