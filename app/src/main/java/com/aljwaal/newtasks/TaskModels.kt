@@ -1,15 +1,39 @@
 package com.aljwaal.newtasks
 
+import java.util.Locale
 import java.util.UUID
 
-enum class TaskPriority(val label: String, val rank: Int) {
-    LOW("منخفضة", 0),
-    NORMAL("عادية", 1),
-    HIGH("عالية", 2),
-    URGENT("عاجلة", 3);
-
+data class TaskPriority(
+    val id: String,
+    val label: String,
+    val rank: Int,
+    val isDefault: Boolean = false
+) {
     companion object {
-        fun from(value: String?): TaskPriority = entries.firstOrNull { it.name == value } ?: NORMAL
+        val NORMAL = TaskPriority("normal", "عادية", 0, true)
+        val MEDIUM = TaskPriority("medium", "متوسطة", 1, true)
+        val URGENT = TaskPriority("urgent", "عاجلة", 2, true)
+        val defaults = listOf(NORMAL, MEDIUM, URGENT)
+
+        fun fromStored(
+            value: String?,
+            storedLabel: String? = null,
+            storedRank: Int? = null
+        ): TaskPriority {
+            val raw = value.orEmpty().trim()
+            defaults.firstOrNull { it.id.equals(raw, ignoreCase = true) }?.let { return it }
+            return when (raw.uppercase(Locale.US)) {
+                "LOW", "NORMAL" -> NORMAL
+                "HIGH", "MEDIUM" -> MEDIUM
+                "URGENT" -> URGENT
+                else -> TaskPriority(
+                    id = raw.ifBlank { "normal" },
+                    label = storedLabel?.trim().orEmpty().ifBlank { raw.ifBlank { NORMAL.label } },
+                    rank = storedRank ?: 1,
+                    isDefault = false
+                )
+            }
+        }
     }
 }
 
