@@ -3,8 +3,9 @@ package com.aljwaal.newtasks
 import android.content.Context
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
+import android.media.AudioFormat
 import android.media.AudioManager
-import android.media.ToneGenerator
+import android.media.AudioTrack
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -12,17 +13,23 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import androidx.annotation.RequiresApi
+import kotlin.math.PI
+import kotlin.math.exp
+import kotlin.math.max
+import kotlin.math.sin
 
 /**
  * مشغل تنبيه واحد وآمن لكل التطبيق.
- * لا يستخدم نغمة منبه الهاتف ولا يسمح باستمرار الصوت أو الاهتزاز دون حد زمني.
+ * يولد الصوت محليًا عبر AudioTrack بدل ToneGenerator أو نغمة منبه الهاتف.
  */
 object AlarmPlayer {
+    private const val SAMPLE_RATE = 16_000
+
     private val lock = Any()
     private val handler = Handler(Looper.getMainLooper())
     private val legacyFocusListener = AudioManager.OnAudioFocusChangeListener { }
 
-    private var toneGenerator: ToneGenerator? = null
+    private var audioTrack: AudioTrack? = null
     private var vibrator: Vibrator? = null
     private var audioManager: AudioManager? = null
     private var focusRequest: Any? = null
@@ -51,43 +58,37 @@ object AlarmPlayer {
         val currentSession = sessionId
 
         runCatching {
+            logAudioState(appContext, mode)
             startVibration(appContext, mode)
+
             when (mode) {
                 AlarmSoundMode.VIBRATE_ONLY -> {
                     AppLog.write(appContext, "ALARM_ALERT_STARTED", "mode=vibrate_only")
                 }
 
                 AlarmSoundMode.GENTLE_ONCE -> {
-                    requestAudioFocus(
-                        appContext,
-                        AudioManager.STREAM_NOTIFICATION,
-                        alarmUsage = false
+                    requestAudioFocus(appContext, AudioManager.STREAM_ALARM)
+                    startGeneratedTone(
+                        context = appContext,
+                        samples = gentleSamples(),
+                        looping = false,
+                        volume = 0.42f,
+                        mode = mode
                     )
-                    toneGenerator = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 35)
-                    handler.post {
-                        synchronized(lock) {
-                            if (active && sessionId == currentSession) {
-                                toneGenerator?.startTone(ToneGenerator.TONE_PROP_BEEP2, 900)
-                                AppLog.write(
-                                    appContext,
-                                    "SOUND_STARTED",
-                                    "mode=gentle_once duration=900"
-                                )
-                            }
-                        }
-                    }
                 }
 
                 AlarmSoundMode.NORMAL_ALARM -> {
-                    requestAudioFocus(
-                        appContext,
-                        AudioManager.STREAM_ALARM,
-                        alarmUsage = true
+                    requestAudioFocus(appContext, AudioManager.STREAM_ALARM)
+                    startGeneratedTone(
+                        context = appContext,
+                        samples = normalAlarmSamples(),
+                        looping = true,
+                        volume = 0.78f,
+                        mode = mode
                     )
-                    toneGenerator = ToneGenerator(AudioManager.STREAM_ALARM, 65)
-                    scheduleNormalTone(appContext, currentSession)
                 }
             }
+
             scheduleAutoStop(
                 appContext,
                 currentSession,
@@ -108,25 +109,122 @@ object AlarmPlayer {
         }
     }
 
-    private fun scheduleNormalTone(context: Context, currentSession: Long) {
-        val cycle = object : Runnable {
-            override fun run() {
-                synchronized(lock) {
-                    if (!active || sessionId != currentSession) return
-                    runCatching {
-                        toneGenerator?.startTone(
-                            ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD,
-                            1_000
-                        )
-                    }.onFailure { error ->
-                        AppLog.write(context, "SOUND_START_FAILED", error.message.orEmpty())
-                    }
-                    AppLog.write(context, "SOUND_CYCLE_STARTED", "mode=normal_alarm")
-                    handler.postDelayed(this, 1_700L)
-                }
+    private fun startGeneratedTone(
+        context: Context,
+        samples: ShortArray,
+        looping: Boolean,
+        volume: Float,
+        mode: AlarmSoundMode
+    ) {
+        val requiredBytes = samples.size * Short.SIZE_BYTES
+        val minimumBytes = AudioTrack.getMinBufferSize(
+            SAMPLE_RATE,
+            AudioFormat.CHANNEL_OUT_MONO,
+            AudioFormat.ENCODING_PCM_16BIT
+        ).coerceAtLeast(0)
+        val bufferBytes = max(requiredBytes, minimumBytes)
+
+        @Suppress("DEPRECATION")
+        val track = AudioTrack(
+            AudioManager.STREAM_ALARM,
+            SAMPLE_RATE,
+            AudioFormat.CHANNEL_OUT_MONO,
+            AudioFormat.ENCODING_PCM_16BIT,
+            bufferBytes,
+            AudioTrack.MODE_STATIC
+        )
+
+        check(track.state == AudioTrack.STATE_INITIALIZED) {
+            "AudioTrack initialization failed"
+        }
+
+        val written = track.write(samples, 0, samples.size)
+        check(written > 0) { "AudioTrack write failed: $written" }
+
+        track.setVolume(volume.coerceIn(0f, 1f))
+        if (looping) {
+            val loopResult = track.setLoopPoints(0, written, -1)
+            check(loopResult == AudioTrack.SUCCESS) {
+                "AudioTrack loop setup failed: $loopResult"
             }
         }
-        handler.post(cycle)
+
+        audioTrack = track
+        track.play()
+
+        AppLog.write(
+            context,
+            "SOUND_STARTED",
+            "engine=AudioTrack mode=${mode.storageValue} looping=$looping samples=$written volume=$volume"
+        )
+    }
+
+    private fun gentleSamples(): ShortArray {
+        val durationSeconds = 1.10
+        val count = (SAMPLE_RATE * durationSeconds).toInt()
+        return ShortArray(count) { index ->
+            val time = index.toDouble() / SAMPLE_RATE
+            var value = 0.0
+            value += decayingTone(time, start = 0.00, frequency = 660.0, amplitude = 0.52)
+            value += decayingTone(time, start = 0.32, frequency = 880.0, amplitude = 0.42)
+            pcm16(value)
+        }
+    }
+
+    private fun normalAlarmSamples(): ShortArray {
+        val durationSeconds = 1.45
+        val count = (SAMPLE_RATE * durationSeconds).toInt()
+        val starts = doubleArrayOf(0.00, 0.38, 0.76)
+        val beepDuration = 0.24
+
+        return ShortArray(count) { index ->
+            val time = index.toDouble() / SAMPLE_RATE
+            var value = 0.0
+            starts.forEach { start ->
+                val local = time - start
+                if (local in 0.0..beepDuration) {
+                    val envelope = sin(PI * local / beepDuration)
+                    value += 0.72 * envelope * (
+                        sin(2.0 * PI * 760.0 * local) +
+                            0.20 * sin(2.0 * PI * 1_140.0 * local)
+                        )
+                }
+            }
+            pcm16(value)
+        }
+    }
+
+    private fun decayingTone(
+        time: Double,
+        start: Double,
+        frequency: Double,
+        amplitude: Double
+    ): Double {
+        if (time < start) return 0.0
+        val local = time - start
+        val envelope = exp(-5.3 * local)
+        return amplitude * envelope * (
+            sin(2.0 * PI * frequency * local) +
+                0.18 * sin(2.0 * PI * frequency * 2.0 * local)
+            )
+    }
+
+    private fun pcm16(value: Double): Short =
+        (value.coerceIn(-1.0, 1.0) * Short.MAX_VALUE).toInt().toShort()
+
+    private fun logAudioState(context: Context, mode: AlarmSoundMode) {
+        val manager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val current = manager.getStreamVolume(AudioManager.STREAM_ALARM)
+        val maximum = manager.getStreamMaxVolume(AudioManager.STREAM_ALARM)
+        val muted = current <= 0
+        AppLog.write(
+            context,
+            "ALARM_AUDIO_STATE",
+            "mode=${mode.storageValue} alarmVolume=$current/$maximum muted=$muted ringerMode=${manager.ringerMode}"
+        )
+        if (muted && mode != AlarmSoundMode.VIBRATE_ONLY) {
+            AppLog.write(context, "ALARM_SOUND_MUTED_BY_DEVICE", "alarmVolume=0")
+        }
     }
 
     private fun scheduleAutoStop(
@@ -175,15 +273,12 @@ object AlarmPlayer {
         )
     }
 
-    private fun requestAudioFocus(context: Context, stream: Int, alarmUsage: Boolean) {
+    private fun requestAudioFocus(context: Context, stream: Int) {
         runCatching {
             audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 val attributes = AudioAttributes.Builder()
-                    .setUsage(
-                        if (alarmUsage) AudioAttributes.USAGE_ALARM
-                        else AudioAttributes.USAGE_NOTIFICATION
-                    )
+                    .setUsage(AudioAttributes.USAGE_ALARM)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                     .build()
                 focusRequest = Api26.requestAudioFocus(audioManager, attributes)
@@ -209,9 +304,11 @@ object AlarmPlayer {
         sessionId++
         handler.removeCallbacksAndMessages(null)
 
-        runCatching { toneGenerator?.stopTone() }
-        runCatching { toneGenerator?.release() }
-        toneGenerator = null
+        runCatching { audioTrack?.pause() }
+        runCatching { audioTrack?.stop() }
+        runCatching { audioTrack?.flush() }
+        runCatching { audioTrack?.release() }
+        audioTrack = null
 
         runCatching { vibrator?.cancel() }
         vibrator = null
