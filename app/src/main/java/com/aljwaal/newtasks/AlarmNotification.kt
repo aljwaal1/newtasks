@@ -26,10 +26,10 @@ object AlarmNotification {
         manager.createNotificationChannel(
             NotificationChannel(
                 CHANNEL_ID,
-                "تنبيهات المهام العاجلة",
+                "تنبيهات المهام",
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                description = "تنبيهات المهام مع شاشة كاملة وصوت واهتزاز"
+                description = "تنبيهات المهام مع شاشة كاملة وتحكم مباشر بالإيقاف"
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
                 enableLights(true)
                 lightColor = Color.RED
@@ -75,6 +75,18 @@ object AlarmNotification {
             .setSilent(true)
             .addAction(
                 R.drawable.ic_alarm,
+                "إيقاف فورًا",
+                actionPendingIntent(
+                    context,
+                    AlarmActionReceiver.ACTION_STOP,
+                    taskId,
+                    title,
+                    notes,
+                    3_200
+                )
+            )
+            .addAction(
+                R.drawable.ic_alarm,
                 "تم الإنجاز",
                 actionPendingIntent(
                     context,
@@ -95,18 +107,6 @@ object AlarmNotification {
                     title,
                     notes,
                     3_202
-                )
-            )
-            .addAction(
-                R.drawable.ic_alarm,
-                "تأجيل 10 دقائق",
-                actionPendingIntent(
-                    context,
-                    AlarmActionReceiver.ACTION_SNOOZE_10,
-                    taskId,
-                    title,
-                    notes,
-                    3_203
                 )
             )
             .build()
