@@ -14,8 +14,8 @@ android {
         applicationId = "com.aljwaal.newtasks"
         minSdk = 21
         targetSdk = 36
-        versionCode = 7
-        versionName = "1.3.0"
+        versionCode = 8
+        versionName = "1.3.1"
 
         // APK عالمي واحد لأجهزة 32-bit و64-bit، بما فيها أجهزة Huawei القديمة.
         ndk {
