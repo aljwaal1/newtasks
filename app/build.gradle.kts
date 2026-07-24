@@ -14,10 +14,10 @@ android {
         applicationId = "com.aljwaal.newtasks"
         minSdk = 21
         targetSdk = 36
-        versionCode = 6
-        versionName = "1.2.1"
+        versionCode = 7
+        versionName = "1.3.0"
 
-        // نبني APK عالميًا واحدًا يدعم أجهزة 32-bit و64-bit ولا نفترض arm64 فقط.
+        // APK عالمي واحد لأجهزة 32-bit و64-bit، بما فيها أجهزة Huawei القديمة.
         ndk {
             abiFilters += listOf(
                 "armeabi-v7a",
@@ -28,7 +28,6 @@ android {
         }
     }
 
-    // منع إنشاء APK منفصل لكل معمارية؛ الملف الناتج واحد وعالمي.
     splits {
         abi {
             isEnable = false
