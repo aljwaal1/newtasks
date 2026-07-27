@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import java.util.Calendar
 
 object AlarmScheduler {
     const val ACTION_FIRE = "com.aljwaal.newtasks.action.FIRE_ALARM"
@@ -17,6 +18,7 @@ object AlarmScheduler {
     const val KIND_TASK = "task"
     const val KIND_TEST = "test"
     const val KIND_SNOOZE = "snooze"
+    const val KIND_FOLLOW_UP = "follow_up"
 
     data class ScheduleResult(
         val success: Boolean,
@@ -60,19 +62,81 @@ object AlarmScheduler {
         minutes: Int
     ): ScheduleResult {
         val triggerAt = System.currentTimeMillis() + minutes * 60_000L
-        val result = schedule(
+        val result = scheduleFollowUp(
             context = context,
-            triggerAtMillis = triggerAt,
-            requestCode = requestCode(taskId.ifBlank { title }, KIND_SNOOZE),
-            kind = KIND_SNOOZE,
             taskId = taskId,
             title = title,
-            notes = notes
+            notes = notes,
+            triggerAtMillis = triggerAt,
+            source = "snooze_${minutes}m"
         )
         AppLog.write(
             context,
             "SNOOZE_SCHEDULED",
             "task=$taskId minutes=$minutes trigger=$triggerAt"
+        )
+        return result
+    }
+
+    fun scheduleTomorrow(
+        context: Context,
+        taskId: String,
+        title: String,
+        notes: String
+    ): ScheduleResult {
+        val triggerAt = Calendar.getInstance().apply {
+            add(Calendar.DAY_OF_YEAR, 1)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+        return scheduleFollowUp(
+            context = context,
+            taskId = taskId,
+            title = title,
+            notes = notes,
+            triggerAtMillis = triggerAt,
+            source = "tomorrow_same_time"
+        )
+    }
+
+    fun scheduleFollowUp(
+        context: Context,
+        taskId: String,
+        title: String,
+        notes: String,
+        triggerAtMillis: Long,
+        source: String = "custom"
+    ): ScheduleResult {
+        val safeTrigger = triggerAtMillis.coerceAtLeast(System.currentTimeMillis() + 5_000L)
+        val task = taskId.takeIf { it.isNotBlank() }?.let { TaskRepository.get(context, it) }
+
+        val result = if (task != null && task.repeatRule == RepeatRule.NONE) {
+            val updated = task.copy(
+                dueAtMillis = safeTrigger,
+                status = TaskStatus.PENDING,
+                reminderEnabled = true,
+                completedAtMillis = 0L,
+                lastNotifiedAtMillis = 0L
+            )
+            cancelTask(context, task.id)
+            TaskRepository.save(context, updated)
+            scheduleTask(context, updated)
+        } else {
+            schedule(
+                context = context,
+                triggerAtMillis = safeTrigger,
+                requestCode = requestCode(taskId.ifBlank { title }, KIND_FOLLOW_UP),
+                kind = KIND_FOLLOW_UP,
+                taskId = taskId,
+                title = title,
+                notes = notes
+            )
+        }
+
+        AppLog.write(
+            context,
+            "FOLLOW_UP_SCHEDULED",
+            "task=$taskId source=$source trigger=${result.triggerAtMillis} success=${result.success}"
         )
         return result
     }
@@ -96,7 +160,7 @@ object AlarmScheduler {
 
     fun cancelTask(context: Context, taskId: String) {
         val alarmManager = alarmManager(context)
-        listOf(KIND_TASK, KIND_SNOOZE).forEach { kind ->
+        listOf(KIND_TASK, KIND_SNOOZE, KIND_FOLLOW_UP).forEach { kind ->
             alarmManager.cancel(
                 alarmPendingIntent(
                     context = context,
