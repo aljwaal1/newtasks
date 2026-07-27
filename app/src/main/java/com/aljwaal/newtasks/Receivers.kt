@@ -101,7 +101,28 @@ class AlarmActionReceiver : BroadcastReceiver() {
                 )
 
                 when (copiedIntent.action) {
-                    ACTION_STOP -> Unit
+                    ACTION_STOP -> {
+                        val keepVisual = copiedIntent.getBooleanExtra(
+                            AlarmNotification.EXTRA_KEEP_VISUAL,
+                            false
+                        )
+                        val task = taskId.takeIf { it.isNotBlank() }
+                            ?.let { TaskRepository.get(appContext, it) }
+                        if (keepVisual && task?.status == TaskStatus.PENDING) {
+                            AlarmNotification.postVisualReminder(
+                                context = appContext,
+                                taskId = taskId,
+                                title = task.title,
+                                notes = task.notes,
+                                kind = AlarmScheduler.KIND_FOLLOW_UP
+                            )
+                            AppLog.write(
+                                appContext,
+                                "UNFINISHED_TASK_VISUAL_REMINDER_KEPT",
+                                "task=$taskId"
+                            )
+                        }
+                    }
 
                     ACTION_DONE -> {
                         if (taskId.isNotBlank()) {
