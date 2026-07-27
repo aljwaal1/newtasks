@@ -18,6 +18,7 @@ import androidx.core.content.ContextCompat
 object AlarmNotification {
     const val CHANNEL_ID = "smart_tasks_urgent_alarm_v2"
     const val NOTIFICATION_ID = 7301
+    const val EXTRA_KEEP_VISUAL = "keep_visual_reminder"
 
     fun ensureChannel(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
@@ -117,38 +118,39 @@ object AlarmNotification {
             .setSilent(true)
             .addAction(
                 R.drawable.ic_alarm,
-                if (activeAlarm) "إيقاف فورًا" else "إغلاق",
+                if (activeAlarm) "إيقاف الصوت" else "إغلاق",
                 actionPendingIntent(
-                    context,
-                    AlarmActionReceiver.ACTION_STOP,
-                    taskId,
-                    title,
-                    notes,
-                    3_200
+                    context = context,
+                    action = AlarmActionReceiver.ACTION_STOP,
+                    taskId = taskId,
+                    title = title,
+                    notes = notes,
+                    baseCode = 3_200,
+                    keepVisual = activeAlarm
                 )
             )
             .addAction(
                 R.drawable.ic_alarm,
                 "تم الإنجاز",
                 actionPendingIntent(
-                    context,
-                    AlarmActionReceiver.ACTION_DONE,
-                    taskId,
-                    title,
-                    notes,
-                    3_201
+                    context = context,
+                    action = AlarmActionReceiver.ACTION_DONE,
+                    taskId = taskId,
+                    title = title,
+                    notes = notes,
+                    baseCode = 3_201
                 )
             )
             .addAction(
                 R.drawable.ic_alarm,
                 "ذكّرني غدًا",
                 actionPendingIntent(
-                    context,
-                    AlarmActionReceiver.ACTION_REMIND_TOMORROW,
-                    taskId,
-                    title,
-                    notes,
-                    3_202
+                    context = context,
+                    action = AlarmActionReceiver.ACTION_REMIND_TOMORROW,
+                    taskId = taskId,
+                    title = title,
+                    notes = notes,
+                    baseCode = 3_202
                 )
             )
 
@@ -231,16 +233,18 @@ object AlarmNotification {
         taskId: String,
         title: String,
         notes: String,
-        baseCode: Int
+        baseCode: Int,
+        keepVisual: Boolean = false
     ): PendingIntent = PendingIntent.getBroadcast(
         context,
-        stableRequestCode("$action:$taskId", baseCode),
+        stableRequestCode("$action:$taskId:$keepVisual", baseCode),
         Intent(context, AlarmActionReceiver::class.java).apply {
             this.action = action
-            data = Uri.parse("smarttasks://action/$action/${taskId.ifBlank { "test" }}")
+            data = Uri.parse("smarttasks://action/$action/${taskId.ifBlank { "test" }}/$keepVisual")
             putExtra(AlarmScheduler.EXTRA_TASK_ID, taskId)
             putExtra(AlarmScheduler.EXTRA_TITLE, title)
             putExtra(AlarmScheduler.EXTRA_NOTES, notes)
+            putExtra(EXTRA_KEEP_VISUAL, keepVisual)
         },
         pendingIntentFlags()
     )
