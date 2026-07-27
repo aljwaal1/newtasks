@@ -3,8 +3,9 @@ name: Build and Publish Android APK
 on:
   push:
     branches:
-      - feature/unified-ui-v1.3
-      - build/v1.3.2
+      - main
+      - feature/persistent-reminders-v1.3.3
+      - build/v1.3.3
   pull_request:
     branches: [ main ]
   workflow_dispatch:
@@ -36,21 +37,21 @@ jobs:
           gradle :app:lintDebug :app:assembleDebug --stacktrace --console=plain > gradle-build.log 2>&1
           status=$?
           if [ "$status" -ne 0 ]; then
-            echo "===== ANDROID CHECK FAILURE — LAST 220 LINES ====="
-            tail -n 220 gradle-build.log
+            echo "===== ANDROID CHECK FAILURE — LAST 240 LINES ====="
+            tail -n 240 gradle-build.log
             exit "$status"
           fi
           echo "===== ANDROID CHECK SUCCESS — LAST 60 LINES ====="
           tail -n 60 gradle-build.log
-          cp app/build/outputs/apk/debug/app-debug.apk SmartTasks-1.3.2-Universal.apk
-          unzip -t SmartTasks-1.3.2-Universal.apk
-          sha256sum SmartTasks-1.3.2-Universal.apk | tee SmartTasks-1.3.2-Universal.apk.sha256
+          cp app/build/outputs/apk/debug/app-debug.apk SmartTasks-1.3.3-Universal.apk
+          unzip -t SmartTasks-1.3.3-Universal.apk
+          sha256sum SmartTasks-1.3.3-Universal.apk | tee SmartTasks-1.3.3-Universal.apk.sha256
 
       - name: Upload build log
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: smart-tasks-gradle-log-v1.3.2
+          name: smart-tasks-gradle-log-v1.3.3
           path: gradle-build.log
           if-no-files-found: ignore
 
@@ -58,7 +59,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: smart-tasks-lint-report-v1.3.2
+          name: smart-tasks-lint-report-v1.3.3
           path: app/build/reports/lint-results-debug.html
           if-no-files-found: ignore
 
@@ -66,24 +67,25 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: smart-tasks-universal-android5plus-v1.3.2
+          name: smart-tasks-universal-android5plus-v1.3.3
           path: |
-            SmartTasks-1.3.2-Universal.apk
-            SmartTasks-1.3.2-Universal.apk.sha256
+            SmartTasks-1.3.3-Universal.apk
+            SmartTasks-1.3.3-Universal.apk.sha256
 
       - name: Publish direct GitHub download
-        if: success() && github.event_name == 'push' && (github.ref == 'refs/heads/build/v1.3.2' || github.ref == 'refs/heads/feature/unified-ui-v1.3')
+        if: success() && github.event_name == 'push'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.3.2-test
-          name: Smart Tasks 1.3.2 Test
+          tag_name: v1.3.3-test
+          name: Smart Tasks 1.3.3 Test
           prerelease: true
-          target_commitish: feature/unified-ui-v1.3
+          target_commitish: ${{ github.sha }}
           fail_on_unmatched_files: true
           files: |
-            SmartTasks-1.3.2-Universal.apk
-            SmartTasks-1.3.2-Universal.apk.sha256
+            SmartTasks-1.3.3-Universal.apk
+            SmartTasks-1.3.3-Universal.apk.sha256
           body: |
-            نسخة اختبار من Smart Tasks 1.3.2.
-            تتضمن إعادة بناء منتقي الوقت بالكامل دون حقول نص أو لوحة مفاتيح النظام.
+            نسخة اختبار من Smart Tasks 1.3.3.
+            تضيف «ذكّرني غدًا» واختيار تاريخ ووقت جديد للمهام غير المكتملة.
+            تحسن اختيار مسار الصوت عند كون صوت المنبه في الجهاز صامتًا.
             تدعم Android 5.0 فأعلى وأجهزة 32-bit و64-bit.

@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import java.util.Calendar
 
 object AlarmScheduler {
     const val ACTION_FIRE = "com.aljwaal.newtasks.action.FIRE_ALARM"
@@ -17,6 +18,7 @@ object AlarmScheduler {
     const val KIND_TASK = "task"
     const val KIND_TEST = "test"
     const val KIND_SNOOZE = "snooze"
+    const val KIND_FOLLOW_UP = "follow_up"
 
     data class ScheduleResult(
         val success: Boolean,
@@ -60,19 +62,91 @@ object AlarmScheduler {
         minutes: Int
     ): ScheduleResult {
         val triggerAt = System.currentTimeMillis() + minutes * 60_000L
-        val result = schedule(
+        val result = scheduleFollowUp(
             context = context,
-            triggerAtMillis = triggerAt,
-            requestCode = requestCode(taskId.ifBlank { title }, KIND_SNOOZE),
-            kind = KIND_SNOOZE,
             taskId = taskId,
             title = title,
-            notes = notes
+            notes = notes,
+            triggerAtMillis = triggerAt,
+            source = "snooze_${minutes}m"
         )
         AppLog.write(
             context,
             "SNOOZE_SCHEDULED",
-            "task=$taskId minutes=$minutes trigger=$triggerAt"
+            "task=$taskId minutes=$minutes trigger=$triggerAt dueDateUnchanged=true"
+        )
+        return result
+    }
+
+    fun scheduleTomorrow(
+        context: Context,
+        taskId: String,
+        title: String,
+        notes: String
+    ): ScheduleResult {
+        val triggerAt = Calendar.getInstance().apply {
+            add(Calendar.DAY_OF_YEAR, 1)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+        return scheduleFollowUp(
+            context = context,
+            taskId = taskId,
+            title = title,
+            notes = notes,
+            triggerAtMillis = triggerAt,
+            source = "tomorrow_same_time"
+        )
+    }
+
+    /**
+     * يحدد موعد التذكير القادم دون تعديل dueAtMillis.
+     * تاريخ الاستحقاق يبقى ثابتًا حتى يستمر حساب عدد أيام التأخير بصورة صحيحة.
+     */
+    fun scheduleFollowUp(
+        context: Context,
+        taskId: String,
+        title: String,
+        notes: String,
+        triggerAtMillis: Long,
+        source: String = "custom"
+    ): ScheduleResult {
+        val safeTrigger = triggerAtMillis.coerceAtLeast(System.currentTimeMillis() + 5_000L)
+        val task = taskId.takeIf { it.isNotBlank() }?.let { TaskRepository.get(context, it) }
+
+        if (task?.status == TaskStatus.COMPLETED) {
+            FollowUpReminderStore.remove(context, taskId)
+            return ScheduleResult(
+                success = false,
+                exact = false,
+                triggerAtMillis = safeTrigger,
+                message = "المهمة مكتملة ولا تحتاج إلى تذكير جديد"
+            )
+        }
+
+        cancelFollowUpAlarm(context, taskId.ifBlank { title })
+        if (taskId.isNotBlank()) {
+            FollowUpReminderStore.set(context, taskId, safeTrigger)
+        }
+
+        val result = schedule(
+            context = context,
+            triggerAtMillis = safeTrigger,
+            requestCode = requestCode(taskId.ifBlank { title }, KIND_FOLLOW_UP),
+            kind = KIND_FOLLOW_UP,
+            taskId = taskId,
+            title = task?.title ?: title,
+            notes = task?.notes ?: notes
+        )
+
+        if (!result.success && taskId.isNotBlank()) {
+            FollowUpReminderStore.remove(context, taskId)
+        }
+
+        AppLog.write(
+            context,
+            "FOLLOW_UP_SCHEDULED",
+            "task=$taskId source=$source trigger=${result.triggerAtMillis} success=${result.success} dueDateUnchanged=true originalDue=${task?.dueAtMillis ?: 0L}"
         )
         return result
     }
@@ -96,7 +170,7 @@ object AlarmScheduler {
 
     fun cancelTask(context: Context, taskId: String) {
         val alarmManager = alarmManager(context)
-        listOf(KIND_TASK, KIND_SNOOZE).forEach { kind ->
+        listOf(KIND_TASK, KIND_SNOOZE, KIND_FOLLOW_UP).forEach { kind ->
             alarmManager.cancel(
                 alarmPendingIntent(
                     context = context,
@@ -108,15 +182,21 @@ object AlarmScheduler {
                 )
             )
         }
-        AppLog.write(context, "TASK_ALARM_CANCELLED", "task=$taskId")
+        FollowUpReminderStore.remove(context, taskId)
+        AppLog.write(context, "TASK_ALARM_CANCELLED", "task=$taskId followUpRemoved=true")
     }
 
     fun restoreAll(context: Context, reason: String): Int {
         var restored = 0
         val now = System.currentTimeMillis()
+        val storedFollowUps = FollowUpReminderStore.all(context)
+
         TaskRepository.list(context)
             .filter { it.status == TaskStatus.PENDING && it.reminderEnabled }
             .forEach { original ->
+                // وجود تذكير متابعة يعني أن الموعد الأصلي قد نبه بالفعل؛ لا نغيره ولا نكرره.
+                if (storedFollowUps.containsKey(original.id)) return@forEach
+
                 var task = original
                 if (task.dueAtMillis <= now && task.lastNotifiedAtMillis >= task.dueAtMillis) {
                     val next = TaskRepository.nextOccurrence(task) ?: return@forEach
@@ -127,6 +207,28 @@ object AlarmScheduler {
                 }
                 if (scheduleTask(context, task).success) restored++
             }
+
+        storedFollowUps.forEach { (taskId, storedTrigger) ->
+            val task = TaskRepository.get(context, taskId)
+            if (task == null || task.status == TaskStatus.COMPLETED || !task.reminderEnabled) {
+                FollowUpReminderStore.remove(context, taskId)
+                return@forEach
+            }
+            val trigger = storedTrigger.coerceAtLeast(now + 5_000L)
+            if (
+                scheduleFollowUp(
+                    context = context,
+                    taskId = taskId,
+                    title = task.title,
+                    notes = task.notes,
+                    triggerAtMillis = trigger,
+                    source = "restore_$reason"
+                ).success
+            ) {
+                restored++
+            }
+        }
+
         AppLog.write(context, "ALL_ALARMS_RESTORED", "reason=$reason count=$restored")
         return restored
     }
@@ -147,6 +249,32 @@ object AlarmScheduler {
             scheduleTask(context, updated)
             AppLog.write(context, "REPEATING_TASK_RESCHEDULED", "task=$taskId next=$next")
         }
+    }
+
+    fun onFollowUpFired(context: Context, taskId: String) {
+        if (taskId.isBlank()) return
+        FollowUpReminderStore.remove(context, taskId)
+        TaskRepository.updateLastNotified(context, taskId)
+        val task = TaskRepository.get(context, taskId)
+        AppLog.write(
+            context,
+            "FOLLOW_UP_FIRED",
+            "task=$taskId dueDateUnchanged=true originalDue=${task?.dueAtMillis ?: 0L}"
+        )
+    }
+
+    private fun cancelFollowUpAlarm(context: Context, id: String) {
+        if (id.isBlank()) return
+        alarmManager(context).cancel(
+            alarmPendingIntent(
+                context = context,
+                requestCode = requestCode(id, KIND_FOLLOW_UP),
+                kind = KIND_FOLLOW_UP,
+                taskId = id,
+                title = "",
+                notes = ""
+            )
+        )
     }
 
     private fun schedule(
