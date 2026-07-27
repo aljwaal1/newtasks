@@ -89,9 +89,9 @@ object AlarmNotification {
         )
         val body = notes.ifBlank {
             if (activeAlarm) {
-                "حان موعد المهمة — اضغط لفتح شاشة التنبيه"
+                "حان موعد المهمة — اختر الإنجاز أو موعد التذكير التالي"
             } else {
-                "انتهى صوت التنبيه، وما زالت المهمة بانتظارك"
+                "المهمة ما زالت غير مكتملة — يمكنك تذكير نفسك غدًا"
             }
         }
 
@@ -141,10 +141,10 @@ object AlarmNotification {
             )
             .addAction(
                 R.drawable.ic_alarm,
-                "تأجيل 5 دقائق",
+                "ذكّرني غدًا",
                 actionPendingIntent(
                     context,
-                    AlarmActionReceiver.ACTION_SNOOZE_5,
+                    AlarmActionReceiver.ACTION_REMIND_TOMORROW,
                     taskId,
                     title,
                     notes,
