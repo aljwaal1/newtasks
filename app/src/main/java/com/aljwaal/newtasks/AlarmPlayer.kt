@@ -20,7 +20,7 @@ import kotlin.math.sin
 
 /**
  * مشغل تنبيه واحد وآمن لكل التطبيق.
- * يولد الصوت محليًا عبر AudioTrack بدل ToneGenerator أو نغمة منبه الهاتف.
+ * يولد الصوت محليًا عبر AudioTrack ويختار مسارًا مسموعًا بدل الالتزام بمسار صامت.
  */
 object AlarmPlayer {
     private const val SAMPLE_RATE = 16_000
@@ -35,6 +35,16 @@ object AlarmPlayer {
     private var focusRequest: Any? = null
     private var active = false
     private var sessionId = 0L
+
+    private data class AudioRoute(
+        val stream: Int,
+        val name: String,
+        val volume: Int,
+        val maximum: Int
+    ) {
+        val ratio: Double
+            get() = if (maximum <= 0) 0.0 else volume.toDouble() / maximum.toDouble()
+    }
 
     fun maxDurationMillis(context: Context): Long =
         maxDurationMillis(AppPreferences.alarmSoundMode(context.applicationContext))
@@ -53,12 +63,13 @@ object AlarmPlayer {
 
         val appContext = context.applicationContext
         val mode = AppPreferences.alarmSoundMode(appContext)
+        val route = resolveAudioRoute(appContext)
         active = true
         sessionId++
         val currentSession = sessionId
 
         runCatching {
-            logAudioState(appContext, mode)
+            logAudioState(appContext, mode, route)
             startVibration(appContext, mode)
 
             when (mode) {
@@ -67,24 +78,26 @@ object AlarmPlayer {
                 }
 
                 AlarmSoundMode.GENTLE_ONCE -> {
-                    requestAudioFocus(appContext, AudioManager.STREAM_ALARM)
+                    requestAudioFocus(appContext, route.stream)
                     startGeneratedTone(
                         context = appContext,
                         samples = gentleSamples(),
                         looping = false,
-                        volume = 0.42f,
-                        mode = mode
+                        volume = 0.58f,
+                        mode = mode,
+                        route = route
                     )
                 }
 
                 AlarmSoundMode.NORMAL_ALARM -> {
-                    requestAudioFocus(appContext, AudioManager.STREAM_ALARM)
+                    requestAudioFocus(appContext, route.stream)
                     startGeneratedTone(
                         context = appContext,
                         samples = normalAlarmSamples(),
                         looping = true,
-                        volume = 0.78f,
-                        mode = mode
+                        volume = 0.88f,
+                        mode = mode,
+                        route = route
                     )
                 }
             }
@@ -97,7 +110,7 @@ object AlarmPlayer {
             AppLog.write(
                 appContext,
                 "ALARM_ALERT_MODE_STARTED",
-                "mode=${mode.storageValue} maxDuration=${maxDurationMillis(mode)}"
+                "mode=${mode.storageValue} maxDuration=${maxDurationMillis(mode)} route=${route.name}"
             )
         }.onFailure { error ->
             AppLog.write(
@@ -114,8 +127,58 @@ object AlarmPlayer {
         samples: ShortArray,
         looping: Boolean,
         volume: Float,
-        mode: AlarmSoundMode
+        mode: AlarmSoundMode,
+        route: AudioRoute
     ) {
+        val routes = buildList {
+            add(route)
+            if (route.stream != AudioManager.STREAM_MUSIC) {
+                val manager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+                val mediaVolume = manager.getStreamVolume(AudioManager.STREAM_MUSIC)
+                val mediaMax = manager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+                if (mediaVolume > 0) {
+                    add(AudioRoute(AudioManager.STREAM_MUSIC, "media_fallback", mediaVolume, mediaMax))
+                }
+            }
+        }
+
+        var lastError: Throwable? = null
+        routes.distinctBy { it.stream }.forEach { candidate ->
+            val result = runCatching {
+                createAndPlayTrack(
+                    samples = samples,
+                    looping = looping,
+                    volume = volume,
+                    stream = candidate.stream
+                )
+            }
+            result.onSuccess { track ->
+                audioTrack = track
+                AppLog.write(
+                    context,
+                    "SOUND_STARTED",
+                    "engine=AudioTrack mode=${mode.storageValue} route=${candidate.name} stream=${candidate.stream} looping=$looping samples=${samples.size} volume=$volume"
+                )
+                return
+            }.onFailure { error ->
+                lastError = error
+                AppLog.write(
+                    context,
+                    "SOUND_ROUTE_FAILED",
+                    "route=${candidate.name} ${error.javaClass.simpleName}: ${error.message}"
+                )
+            }
+        }
+
+        throw lastError ?: IllegalStateException("No audible AudioTrack route available")
+    }
+
+    private fun createAndPlayTrack(
+        samples: ShortArray,
+        looping: Boolean,
+        volume: Float,
+        stream: Int
+    ): AudioTrack {
         val requiredBytes = samples.size * Short.SIZE_BYTES
         val minimumBytes = AudioTrack.getMinBufferSize(
             SAMPLE_RATE,
@@ -126,7 +189,7 @@ object AlarmPlayer {
 
         @Suppress("DEPRECATION")
         val track = AudioTrack(
-            AudioManager.STREAM_ALARM,
+            stream,
             SAMPLE_RATE,
             AudioFormat.CHANNEL_OUT_MONO,
             AudioFormat.ENCODING_PCM_16BIT,
@@ -135,7 +198,7 @@ object AlarmPlayer {
         )
 
         check(track.state == AudioTrack.STATE_INITIALIZED) {
-            "AudioTrack initialization failed"
+            "AudioTrack initialization failed for stream=$stream"
         }
 
         val written = track.write(samples, 0, samples.size)
@@ -149,14 +212,11 @@ object AlarmPlayer {
             }
         }
 
-        audioTrack = track
         track.play()
-
-        AppLog.write(
-            context,
-            "SOUND_STARTED",
-            "engine=AudioTrack mode=${mode.storageValue} looping=$looping samples=$written volume=$volume"
-        )
+        check(track.playState == AudioTrack.PLAYSTATE_PLAYING) {
+            "AudioTrack did not enter playing state"
+        }
+        return track
     }
 
     private fun gentleSamples(): ShortArray {
@@ -165,8 +225,8 @@ object AlarmPlayer {
         return ShortArray(count) { index ->
             val time = index.toDouble() / SAMPLE_RATE
             var value = 0.0
-            value += decayingTone(time, start = 0.00, frequency = 660.0, amplitude = 0.52)
-            value += decayingTone(time, start = 0.32, frequency = 880.0, amplitude = 0.42)
+            value += decayingTone(time, start = 0.00, frequency = 660.0, amplitude = 0.64)
+            value += decayingTone(time, start = 0.32, frequency = 880.0, amplitude = 0.54)
             pcm16(value)
         }
     }
@@ -184,9 +244,9 @@ object AlarmPlayer {
                 val local = time - start
                 if (local in 0.0..beepDuration) {
                     val envelope = sin(PI * local / beepDuration)
-                    value += 0.72 * envelope * (
+                    value += 0.82 * envelope * (
                         sin(2.0 * PI * 760.0 * local) +
-                            0.20 * sin(2.0 * PI * 1_140.0 * local)
+                            0.24 * sin(2.0 * PI * 1_140.0 * local)
                         )
                 }
             }
@@ -212,18 +272,51 @@ object AlarmPlayer {
     private fun pcm16(value: Double): Short =
         (value.coerceIn(-1.0, 1.0) * Short.MAX_VALUE).toInt().toShort()
 
-    private fun logAudioState(context: Context, mode: AlarmSoundMode) {
+    private fun resolveAudioRoute(context: Context): AudioRoute {
         val manager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        val current = manager.getStreamVolume(AudioManager.STREAM_ALARM)
-        val maximum = manager.getStreamMaxVolume(AudioManager.STREAM_ALARM)
-        val muted = current <= 0
+        val candidates = listOf(
+            AudioRoute(
+                AudioManager.STREAM_ALARM,
+                "alarm",
+                manager.getStreamVolume(AudioManager.STREAM_ALARM),
+                manager.getStreamMaxVolume(AudioManager.STREAM_ALARM)
+            ),
+            AudioRoute(
+                AudioManager.STREAM_NOTIFICATION,
+                "notification",
+                manager.getStreamVolume(AudioManager.STREAM_NOTIFICATION),
+                manager.getStreamMaxVolume(AudioManager.STREAM_NOTIFICATION)
+            ),
+            AudioRoute(
+                AudioManager.STREAM_MUSIC,
+                "media",
+                manager.getStreamVolume(AudioManager.STREAM_MUSIC),
+                manager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+            )
+        )
+        return candidates.filter { it.volume > 0 }
+            .maxByOrNull { it.ratio }
+            ?: candidates.first()
+    }
+
+    private fun logAudioState(context: Context, mode: AlarmSoundMode, route: AudioRoute) {
+        val manager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val alarm = manager.getStreamVolume(AudioManager.STREAM_ALARM)
+        val alarmMax = manager.getStreamMaxVolume(AudioManager.STREAM_ALARM)
+        val notification = manager.getStreamVolume(AudioManager.STREAM_NOTIFICATION)
+        val notificationMax = manager.getStreamMaxVolume(AudioManager.STREAM_NOTIFICATION)
+        val media = manager.getStreamVolume(AudioManager.STREAM_MUSIC)
+        val mediaMax = manager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        val allMuted = alarm <= 0 && notification <= 0 && media <= 0
         AppLog.write(
             context,
             "ALARM_AUDIO_STATE",
-            "mode=${mode.storageValue} alarmVolume=$current/$maximum muted=$muted ringerMode=${manager.ringerMode}"
+            "mode=${mode.storageValue} chosen=${route.name}:${route.volume}/${route.maximum} alarm=$alarm/$alarmMax notification=$notification/$notificationMax media=$media/$mediaMax allMuted=$allMuted ringerMode=${manager.ringerMode}"
         )
-        if (muted && mode != AlarmSoundMode.VIBRATE_ONLY) {
-            AppLog.write(context, "ALARM_SOUND_MUTED_BY_DEVICE", "alarmVolume=0")
+        if (allMuted && mode != AlarmSoundMode.VIBRATE_ONLY) {
+            AppLog.write(context, "ALARM_SOUND_MUTED_BY_DEVICE", "allSoundStreams=0")
+        } else if (route.stream != AudioManager.STREAM_ALARM && mode != AlarmSoundMode.VIBRATE_ONLY) {
+            AppLog.write(context, "ALARM_SOUND_FALLBACK_ROUTE", "chosen=${route.name}")
         }
     }
 
@@ -277,8 +370,13 @@ object AlarmPlayer {
         runCatching {
             audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val usage = if (stream == AudioManager.STREAM_ALARM) {
+                    AudioAttributes.USAGE_ALARM
+                } else {
+                    AudioAttributes.USAGE_NOTIFICATION_EVENT
+                }
                 val attributes = AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_ALARM)
+                    .setUsage(usage)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                     .build()
                 focusRequest = Api26.requestAudioFocus(audioManager, attributes)
