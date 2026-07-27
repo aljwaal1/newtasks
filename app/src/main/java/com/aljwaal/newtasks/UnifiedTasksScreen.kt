@@ -48,6 +48,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.util.Calendar
 
 @Suppress("UNUSED_PARAMETER")
 @Composable
@@ -256,7 +257,9 @@ private fun CleanTaskCard(
     onToggle: (TaskItem) -> Unit
 ) {
     val completed = task.status == TaskStatus.COMPLETED
-    val overdue = !completed && task.dueAtMillis < System.currentTimeMillis()
+    val now = System.currentTimeMillis()
+    val overdue = !completed && task.dueAtMillis < now
+    val overdueText = if (overdue) overdueDaysLabel(task.dueAtMillis, now) else null
     val priorityColor = when (task.priority.id) {
         TaskPriority.URGENT.id -> Color(0xFFDC2626)
         TaskPriority.MEDIUM.id -> Color(0xFFEA580C)
@@ -307,6 +310,21 @@ private fun CleanTaskCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                overdueText?.let { label ->
+                    Spacer(Modifier.height(4.dp))
+                    Surface(
+                        shape = RoundedCornerShape(9.dp),
+                        color = Color(0xFFFEE2E2)
+                    ) {
+                        Text(
+                            label,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            color = Color(0xFFB91C1C),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
                 if (task.category.isNotBlank() && task.category != "عام") {
                     Text(task.category, color = Color(0xFF94A3B8), fontSize = 10.sp)
                 }
@@ -337,5 +355,38 @@ private fun CleanTaskCard(
                 }
             }
         }
+    }
+}
+
+private fun overdueDaysLabel(dueAtMillis: Long, nowMillis: Long): String? {
+    if (dueAtMillis >= nowMillis) return null
+
+    val dueDay = Calendar.getInstance().apply {
+        timeInMillis = dueAtMillis
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }
+    val today = Calendar.getInstance().apply {
+        timeInMillis = nowMillis
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }
+
+    var days = 0
+    while (dueDay.before(today)) {
+        dueDay.add(Calendar.DAY_OF_YEAR, 1)
+        days++
+    }
+
+    return when (days) {
+        0 -> "متأخرة اليوم"
+        1 -> "متأخرة يومًا واحدًا"
+        2 -> "متأخرة يومين"
+        in 3..10 -> "متأخرة ${NumberFormatUtils.number(days)} أيام"
+        else -> "متأخرة ${NumberFormatUtils.number(days)} يومًا"
     }
 }
