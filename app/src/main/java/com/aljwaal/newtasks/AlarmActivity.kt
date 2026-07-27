@@ -20,7 +20,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Alarm
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.EventRepeat
 import androidx.compose.material.icons.filled.Snooze
 import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material3.Button
@@ -41,6 +43,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -48,6 +51,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.lifecycleScope
+import java.util.Calendar
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
@@ -103,7 +107,9 @@ class AlarmActivity : ComponentActivity() {
                         onStopAlarm = ::stopAlarm,
                         onDone = ::complete,
                         onSnooze5 = { snooze(5) },
-                        onSnooze10 = { snooze(10) }
+                        onSnooze10 = { snooze(10) },
+                        onTomorrow = ::remindTomorrow,
+                        onCustomReminder = ::remindAt
                     )
                 }
             }
@@ -195,6 +201,54 @@ class AlarmActivity : ComponentActivity() {
             finishAndRemoveTask()
         }
     }
+
+    private fun remindTomorrow() {
+        val currentTaskId = taskId
+        val currentTitle = alarmTitle
+        val currentNotes = alarmNotes
+        AlarmService.stop(this)
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) {
+                AlarmScheduler.scheduleTomorrow(
+                    this@AlarmActivity,
+                    currentTaskId,
+                    currentTitle,
+                    currentNotes
+                )
+                AppLog.write(
+                    this@AlarmActivity,
+                    "ALARM_REMIND_TOMORROW_FROM_SCREEN",
+                    "task=$currentTaskId"
+                )
+            }
+            finishAndRemoveTask()
+        }
+    }
+
+    private fun remindAt(triggerAtMillis: Long) {
+        val currentTaskId = taskId
+        val currentTitle = alarmTitle
+        val currentNotes = alarmNotes
+        AlarmService.stop(this)
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) {
+                AlarmScheduler.scheduleFollowUp(
+                    context = this@AlarmActivity,
+                    taskId = currentTaskId,
+                    title = currentTitle,
+                    notes = currentNotes,
+                    triggerAtMillis = triggerAtMillis,
+                    source = "alarm_screen_custom"
+                )
+                AppLog.write(
+                    this@AlarmActivity,
+                    "ALARM_CUSTOM_REMINDER_FROM_SCREEN",
+                    "task=$currentTaskId trigger=$triggerAtMillis"
+                )
+            }
+            finishAndRemoveTask()
+        }
+    }
 }
 
 @Composable
@@ -204,10 +258,25 @@ private fun AlarmScreen(
     onStopAlarm: () -> Unit,
     onDone: () -> Unit,
     onSnooze5: () -> Unit,
-    onSnooze10: () -> Unit
+    onSnooze10: () -> Unit,
+    onTomorrow: () -> Unit,
+    onCustomReminder: (Long) -> Unit
 ) {
     BackHandler(enabled = true) { onStopAlarm() }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var customAt by remember {
+        mutableLongStateOf(
+            Calendar.getInstance().apply {
+                add(Calendar.DAY_OF_YEAR, 1)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }.timeInMillis
+        )
+    }
+    var showDatePicker by remember { mutableStateOf(false) }
+    var showTimePicker by remember { mutableStateOf(false) }
+    var pickerError by remember { mutableStateOf<String?>(null) }
+
     LaunchedEffect(Unit) {
         while (currentCoroutineContext().isActive) {
             now = System.currentTimeMillis()
@@ -217,7 +286,7 @@ private fun AlarmScreen(
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Box(
-            modifier = Modifier.fillMaxSize().padding(18.dp),
+            modifier = Modifier.fillMaxSize().padding(16.dp),
             contentAlignment = Alignment.Center
         ) {
             Column(
@@ -227,53 +296,121 @@ private fun AlarmScreen(
             ) {
                 Box(
                     modifier = Modifier
-                        .background(Color(0xFFE0E7FF), RoundedCornerShape(26.dp))
-                        .padding(20.dp),
+                        .background(Color(0xFFE0E7FF), RoundedCornerShape(24.dp))
+                        .padding(16.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(Icons.Default.Alarm, null, tint = Color(0xFF4338CA))
                 }
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(8.dp))
                 Text("تنبيه مهمة", color = Color(0xFF64748B), fontWeight = FontWeight.SemiBold)
                 Text(
                     NumberFormatUtils.formatTime(now),
-                    fontSize = 58.sp,
+                    fontSize = 48.sp,
                     fontWeight = FontWeight.Black,
                     color = Color(0xFF0F172A)
                 )
                 Text(NumberFormatUtils.formatWeekdayDate(now), color = Color(0xFF64748B))
-                Spacer(Modifier.height(14.dp))
+                Spacer(Modifier.height(10.dp))
                 AlarmContent(title, notes)
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(12.dp))
                 Button(
                     onClick = onStopAlarm,
-                    modifier = Modifier.fillMaxWidth().height(64.dp),
+                    modifier = Modifier.fillMaxWidth().height(58.dp),
                     shape = RoundedCornerShape(18.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626))
                 ) {
                     Icon(Icons.Default.VolumeOff, null)
-                    Text("  إيقاف التنبيه فورًا", fontSize = 19.sp, fontWeight = FontWeight.Bold)
+                    Text("  إيقاف التنبيه فورًا", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 }
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(7.dp))
                 Button(
                     onClick = onDone,
-                    modifier = Modifier.fillMaxWidth().height(54.dp),
+                    modifier = Modifier.fillMaxWidth().height(52.dp),
                     shape = RoundedCornerShape(16.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F766E))
                 ) {
                     Icon(Icons.Default.CheckCircle, null)
                     Text("  تم الإنجاز", fontSize = 17.sp, fontWeight = FontWeight.Bold)
                 }
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(7.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    SnoozeButton("5 دقائق", onSnooze5, Modifier.weight(1f))
-                    SnoozeButton("10 دقائق", onSnooze10, Modifier.weight(1f))
+                    AlarmChoiceButton(Icons.Default.Snooze, "5 دقائق", onSnooze5, Modifier.weight(1f))
+                    AlarmChoiceButton(Icons.Default.Snooze, "10 دقائق", onSnooze10, Modifier.weight(1f))
+                }
+                Spacer(Modifier.height(7.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    AlarmChoiceButton(
+                        Icons.Default.EventRepeat,
+                        "ذكّرني غدًا",
+                        onTomorrow,
+                        Modifier.weight(1f)
+                    )
+                    AlarmChoiceButton(
+                        Icons.Default.CalendarMonth,
+                        "موعد آخر",
+                        {
+                            pickerError = null
+                            showDatePicker = true
+                        },
+                        Modifier.weight(1f)
+                    )
+                }
+                pickerError?.let {
+                    Spacer(Modifier.height(5.dp))
+                    Text(
+                        it,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.error,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
                 }
             }
         }
+    }
+
+    if (showDatePicker) {
+        SafeDatePickerDialog(
+            initialMillis = customAt,
+            onDismiss = { showDatePicker = false },
+            onConfirm = { year, month, day ->
+                val old = Calendar.getInstance().apply { timeInMillis = customAt }
+                customAt = NumberFormatUtils.withDateAndTime(
+                    year,
+                    month,
+                    day,
+                    old.get(Calendar.HOUR_OF_DAY),
+                    old.get(Calendar.MINUTE)
+                )
+                showDatePicker = false
+                showTimePicker = true
+            }
+        )
+    }
+
+    if (showTimePicker) {
+        SafeTimePickerDialog(
+            initialMillis = customAt,
+            onDismiss = { showTimePicker = false },
+            onConfirm = { hour, minute ->
+                val selected = setTime(customAt, hour, minute)
+                if (selected <= System.currentTimeMillis() + 1_000L) {
+                    pickerError = "اختر موعدًا قادمًا للتذكير."
+                    showTimePicker = false
+                } else {
+                    showTimePicker = false
+                    onCustomReminder(selected)
+                }
+            }
+        )
     }
 }
 
@@ -283,24 +420,24 @@ private fun AlarmContent(title: String, notes: String) {
         modifier = Modifier
             .fillMaxWidth()
             .background(Color.White, RoundedCornerShape(22.dp))
-            .padding(18.dp),
+            .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
             title,
             textAlign = TextAlign.Center,
-            fontSize = 23.sp,
-            lineHeight = 30.sp,
+            fontSize = 22.sp,
+            lineHeight = 28.sp,
             fontWeight = FontWeight.Bold,
             color = Color(0xFF0F172A)
         )
         if (notes.isNotBlank()) {
-            Spacer(Modifier.height(7.dp))
+            Spacer(Modifier.height(6.dp))
             Text(
                 notes,
                 textAlign = TextAlign.Center,
                 color = Color(0xFF64748B),
-                lineHeight = 21.sp,
+                lineHeight = 20.sp,
                 maxLines = 3
             )
         }
@@ -308,17 +445,18 @@ private fun AlarmContent(title: String, notes: String) {
 }
 
 @Composable
-private fun SnoozeButton(
+private fun AlarmChoiceButton(
+    icon: ImageVector,
     label: String,
     onClick: () -> Unit,
     modifier: Modifier
 ) {
     OutlinedButton(
         onClick = onClick,
-        modifier = modifier.height(50.dp),
+        modifier = modifier.height(48.dp),
         shape = RoundedCornerShape(15.dp)
     ) {
-        Icon(Icons.Default.Snooze, null)
-        Text("  $label")
+        Icon(icon, null)
+        Text("  $label", fontSize = 12.sp)
     }
 }
