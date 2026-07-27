@@ -145,9 +145,34 @@ class AlarmActivity : ComponentActivity() {
     }
 
     private fun stopAlarm() {
+        val currentTaskId = taskId
         AlarmService.stop(this)
-        AppLog.write(this, "ALARM_STOPPED_FROM_SCREEN", "task=$taskId")
-        finishAndRemoveTask()
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) {
+                val task = currentTaskId.takeIf { it.isNotBlank() }
+                    ?.let { TaskRepository.get(this@AlarmActivity, it) }
+                if (task?.status == TaskStatus.PENDING) {
+                    AlarmNotification.postVisualReminder(
+                        context = this@AlarmActivity,
+                        taskId = task.id,
+                        title = task.title,
+                        notes = task.notes,
+                        kind = AlarmScheduler.KIND_FOLLOW_UP
+                    )
+                    AppLog.write(
+                        this@AlarmActivity,
+                        "UNFINISHED_TASK_VISUAL_REMINDER_KEPT",
+                        "task=$currentTaskId source=alarm_screen"
+                    )
+                }
+                AppLog.write(
+                    this@AlarmActivity,
+                    "ALARM_SOUND_STOPPED_FROM_SCREEN",
+                    "task=$currentTaskId"
+                )
+            }
+            finishAndRemoveTask()
+        }
     }
 
     private fun complete() {
@@ -321,7 +346,7 @@ private fun AlarmScreen(
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626))
                 ) {
                     Icon(Icons.Default.VolumeOff, null)
-                    Text("  إيقاف التنبيه فورًا", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text("  إيقاف الصوت فقط", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 }
                 Spacer(Modifier.height(7.dp))
                 Button(
