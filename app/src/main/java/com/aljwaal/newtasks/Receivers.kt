@@ -37,8 +37,10 @@ class AlarmReceiver : BroadcastReceiver() {
                     ?: copiedIntent.getStringExtra(AlarmScheduler.EXTRA_NOTES).orEmpty()
 
                 AppLog.write(appContext, "ALARM_RECEIVED", "kind=$kind task=$taskId")
-                if (kind == AlarmScheduler.KIND_TASK) {
-                    AlarmScheduler.onAlarmFired(appContext, taskId)
+                when (kind) {
+                    AlarmScheduler.KIND_TASK -> AlarmScheduler.onAlarmFired(appContext, taskId)
+                    AlarmScheduler.KIND_FOLLOW_UP ->
+                        AlarmScheduler.onFollowUpFired(appContext, taskId)
                 }
 
                 val serviceStarted = runCatching {
