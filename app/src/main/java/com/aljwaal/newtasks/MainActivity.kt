@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.view.View
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -71,6 +72,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        window.statusBarColor = android.graphics.Color.rgb(242, 244, 255)
+        window.navigationBarColor = android.graphics.Color.rgb(18, 24, 45)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+        }
         AlarmNotification.ensureChannel(this)
         AppLog.write(
             this,
@@ -87,7 +93,7 @@ class MainActivity : ComponentActivity() {
                         primary = Color(0xFF4F46E5),
                         onPrimary = Color.White,
                         secondary = Color(0xFF0F766E),
-                        background = Color(0xFFF4F7FB),
+                        background = Color(0xFFF2F4FF),
                         surface = Color.White,
                         error = Color(0xFFDC2626)
                     )

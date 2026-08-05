@@ -1,6 +1,7 @@
 package com.aljwaal.newtasks
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -43,6 +45,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -72,13 +75,13 @@ internal fun UnifiedTasksScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFFF4F7FB))
+            .background(Color(0xFFF2F4FF))
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 12.dp, vertical = 10.dp)
-                .padding(bottom = 74.dp),
+                .padding(horizontal = 14.dp, vertical = 12.dp)
+                .padding(bottom = 82.dp),
             verticalArrangement = Arrangement.spacedBy(9.dp)
         ) {
             SimpleHeader(
@@ -130,7 +133,13 @@ internal fun UnifiedTasksScreen(
 @Composable
 private fun SimpleHeader(pendingCount: Int, onSettings: () -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp, vertical = 3.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                brush = Brush.linearGradient(listOf(Color(0xFF4338CA), Color(0xFF7C3AED))),
+                shape = RoundedCornerShape(24.dp)
+            )
+            .padding(horizontal = 16.dp, vertical = 15.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
@@ -138,22 +147,22 @@ private fun SimpleHeader(pendingCount: Int, onSettings: () -> Unit) {
                 "مهامي",
                 fontSize = 25.sp,
                 fontWeight = FontWeight.Black,
-                color = Color(0xFF0F172A)
+                color = Color.White
             )
             Text(
                 "${NumberFormatUtils.number(pendingCount)} قيد التنفيذ",
-                color = Color(0xFF64748B),
+                color = Color(0xFFE0E7FF),
                 fontSize = 12.sp
             )
         }
         Surface(
             modifier = Modifier.size(46.dp).clickable(onClick = onSettings),
             shape = RoundedCornerShape(15.dp),
-            color = Color.White,
-            shadowElevation = 1.dp
+            color = Color.White.copy(alpha = 0.18f),
+            shadowElevation = 0.dp
         ) {
             Box(contentAlignment = Alignment.Center) {
-                Icon(Icons.Default.Settings, "الإعدادات", tint = Color(0xFF475569))
+                Icon(Icons.Default.Settings, "الإعدادات", tint = Color.White)
             }
         }
     }
@@ -173,9 +182,9 @@ private fun SummaryRow(tasks: List<TaskItem>, now: Long) {
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(7.dp)
     ) {
-        SummaryCard("اليوم", today, Color(0xFFEFF6FF), Color(0xFF1D4ED8), Modifier.weight(1f))
-        SummaryCard("متأخرة", overdue, Color(0xFFFEF2F2), Color(0xFFB91C1C), Modifier.weight(1f))
-        SummaryCard("مكتملة", completed, Color(0xFFECFDF5), Color(0xFF047857), Modifier.weight(1f))
+        SummaryCard("اليوم", today, Color(0xFFE7EEFF), Color(0xFF2554D9), Modifier.weight(1f))
+        SummaryCard("متأخرة", overdue, Color(0xFFFFE9E7), Color(0xFFD92D20), Modifier.weight(1f))
+        SummaryCard("مكتملة", completed, Color(0xFFE1F8EC), Color(0xFF07883F), Modifier.weight(1f))
     }
 }
 
@@ -188,7 +197,7 @@ private fun SummaryCard(
     modifier: Modifier
 ) {
     Surface(
-        modifier = modifier.height(66.dp),
+        modifier = modifier.height(72.dp).border(1.dp, foreground.copy(alpha = 0.12f), RoundedCornerShape(18.dp)),
         shape = RoundedCornerShape(17.dp),
         color = background
     ) {
@@ -230,17 +239,21 @@ private fun EmptyTasks(onAdd: () -> Unit) {
 @Composable
 private fun BottomAddBar(onAdd: () -> Unit, modifier: Modifier = Modifier) {
     Surface(
-        modifier = modifier.fillMaxWidth(),
-        color = Color.White,
+        modifier = modifier.fillMaxWidth().navigationBarsPadding(),
+        color = Color(0xFFF2F4FF),
         shadowElevation = 10.dp
     ) {
         Button(
             onClick = onAdd,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 18.dp, vertical = 10.dp)
+                .padding(horizontal = 16.dp, vertical = 11.dp)
                 .height(54.dp),
-            shape = RoundedCornerShape(18.dp)
+            shape = RoundedCornerShape(18.dp),
+            colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                containerColor = Color(0xFF5138EE),
+                contentColor = Color.White
+            )
         ) {
             Icon(Icons.Default.Add, null)
             Spacer(Modifier.width(8.dp))
@@ -268,10 +281,14 @@ private fun CleanTaskCard(
     var menuOpen by remember { mutableStateOf(false) }
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
+        modifier = Modifier.fillMaxWidth().border(
+            1.dp,
+            if (overdue) Color(0xFFFCA5A5) else priorityColor.copy(alpha = 0.18f),
+            RoundedCornerShape(20.dp)
+        ),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 9.dp),
@@ -280,13 +297,21 @@ private fun CleanTaskCard(
             Surface(
                 modifier = Modifier.size(46.dp).clickable { onToggle(task) },
                 shape = RoundedCornerShape(15.dp),
-                color = if (completed) Color(0xFFDCFCE7) else Color(0xFFF1F5F9)
+                color = when {
+                    completed -> Color(0xFFDDF8E9)
+                    overdue -> Color(0xFFFFECEA)
+                    else -> Color(0xFFE9EDFF)
+                }
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         Icons.Default.CheckCircle,
                         if (completed) "إعادة فتح" else "إنجاز",
-                        tint = if (completed) Color(0xFF0F766E) else Color(0xFF94A3B8)
+                        tint = when {
+                            completed -> Color(0xFF07883F)
+                            overdue -> Color(0xFFD92D20)
+                            else -> Color(0xFF5B4BE8)
+                        }
                     )
                 }
             }

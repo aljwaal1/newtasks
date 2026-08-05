@@ -3,8 +3,8 @@
     <style name="Theme.SmartTasksAlarm" parent="android:style/Theme.Material.Light.NoActionBar">
         <item name="android:fontFamily">sans</item>
         <item name="android:windowActionModeOverlay">true</item>
-        <item name="android:statusBarColor">#F8FAFC</item>
-        <item name="android:navigationBarColor">#F8FAFC</item>
+        <item name="android:statusBarColor">#F2F4FF</item>
+        <item name="android:navigationBarColor">#12182D</item>
         <item name="android:colorAccent">#4F46E5</item>
     </style>
 </resources>
