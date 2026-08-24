@@ -1,5 +1,7 @@
 package com.aljwaal.newtasks
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -23,6 +25,7 @@ import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.ImportExport
@@ -204,6 +207,14 @@ internal fun CompactSettingsDialog(
                     )
                 }
 
+                DeveloperContactCard {
+                    val emailIntent = Intent(Intent.ACTION_SENDTO).apply {
+                        data = Uri.parse("mailto:fastunllocked2017@gmail.com")
+                        putExtra(Intent.EXTRA_SUBJECT, "Smart Tasks")
+                    }
+                    context.startActivity(emailIntent)
+                }
+
                 Spacer(Modifier.weight(1f))
                 Text(
                     "Smart Tasks ${BuildConfig.VERSION_NAME} • Android 5.0 فأعلى",
@@ -253,6 +264,46 @@ private fun SettingsHeader(onDismiss: () -> Unit) {
         }
         IconButton(onClick = onDismiss) {
             Icon(Icons.Default.Close, "إغلاق")
+        }
+    }
+}
+
+@Composable
+private fun DeveloperContactCard(onClick: () -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        color = Color.White
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(11.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                modifier = Modifier.size(38.dp),
+                shape = RoundedCornerShape(12.dp),
+                color = Color(0xFFE0E7FF)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Default.Email,
+                        null,
+                        modifier = Modifier.size(19.dp),
+                        tint = Color(0xFF4338CA)
+                    )
+                }
+            }
+            Spacer(Modifier.width(9.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text("مراسلة المطور", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Text(
+                    "fastunllocked2017@gmail.com",
+                    color = Color(0xFF64748B),
+                    fontSize = 10.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
     }
 }
