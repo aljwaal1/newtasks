@@ -14,8 +14,8 @@ android {
         applicationId = "com.aljwaal.newtasks"
         minSdk = 21
         targetSdk = 36
-        versionCode = 10
-        versionName = "1.3.3"
+        versionCode = 11
+        versionName = "1.3.4"
 
         // APK عالمي واحد لأجهزة 32-bit و64-bit، بما فيها أجهزة Huawei القديمة.
         ndk {
@@ -34,9 +34,32 @@ android {
         }
     }
 
+    signingConfigs {
+        val keystorePath = System.getenv("ANDROID_KEYSTORE_PATH")
+        val storePasswordValue = System.getenv("ANDROID_STORE_PASSWORD")
+        val keyAliasValue = System.getenv("ANDROID_KEY_ALIAS")
+        val keyPasswordValue = System.getenv("ANDROID_KEY_PASSWORD")
+
+        if (!keystorePath.isNullOrBlank() &&
+            !storePasswordValue.isNullOrBlank() &&
+            !keyAliasValue.isNullOrBlank() &&
+            !keyPasswordValue.isNullOrBlank()
+        ) {
+            create("playRelease") {
+                storeFile = file(keystorePath)
+                storePassword = storePasswordValue
+                keyAlias = keyAliasValue
+                keyPassword = keyPasswordValue
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            if (signingConfigs.names.contains("playRelease")) {
+                signingConfig = signingConfigs.getByName("playRelease")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
