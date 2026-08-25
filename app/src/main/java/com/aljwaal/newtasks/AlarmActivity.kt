@@ -4,9 +4,11 @@ import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -223,7 +225,7 @@ class AlarmActivity : ComponentActivity() {
                     "task=$currentTaskId minutes=$minutes"
                 )
             }
-            finishAndRemoveTask()
+            returnToMain("تم تأجيل التذكير لمدة $minutes دقائق")
         }
     }
 
@@ -246,7 +248,7 @@ class AlarmActivity : ComponentActivity() {
                     "task=$currentTaskId"
                 )
             }
-            finishAndRemoveTask()
+            returnToMain("تم حفظ التذكير ليوم غد")
         }
     }
 
@@ -271,8 +273,17 @@ class AlarmActivity : ComponentActivity() {
                     "task=$currentTaskId trigger=$triggerAtMillis"
                 )
             }
-            finishAndRemoveTask()
+            returnToMain("تم حفظ موعد التذكير الجديد")
         }
+    }
+
+    private fun returnToMain(message: String) {
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+        val mainIntent = Intent(this, MainActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        }
+        startActivity(mainIntent)
+        finish()
     }
 }
 
@@ -479,9 +490,14 @@ private fun AlarmChoiceButton(
     OutlinedButton(
         onClick = onClick,
         modifier = modifier.height(48.dp),
-        shape = RoundedCornerShape(15.dp)
+        shape = RoundedCornerShape(15.dp),
+        border = BorderStroke(1.5.dp, Color(0xFF4F46E5)),
+        colors = ButtonDefaults.outlinedButtonColors(
+            containerColor = Color(0xFFF5F3FF),
+            contentColor = Color(0xFF3730A3)
+        )
     ) {
         Icon(icon, null)
-        Text("  $label", fontSize = 12.sp)
+        Text("  $label", fontSize = 12.sp, fontWeight = FontWeight.Bold)
     }
 }
