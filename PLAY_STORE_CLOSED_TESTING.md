@@ -7,30 +7,66 @@
 - Version name: `1.3.5`
 - Version code: `12`
 - Target SDK: `36`
-- Minimum SDK: `21`
+- Minimum SDK: `23` (Android 6.0+)
 - Contact email: `fastunllocked2017@gmail.com`
 
 ## Release track
 
-Use **Closed testing** for this build. Do not promote to Production until test ads are replaced with the real AdMob IDs and the production privacy/consent setup is reviewed.
+Use **Closed testing** for this build first. The signed Google Play workflow is prepared to build with live AdMob identifiers so genuine testers can receive monetized ads.
 
 ## Ads declaration
 
 Choose **Yes, my app contains ads**.
 
-This closed-testing build uses Google's official demo AdMob App ID and demo adaptive banner unit. The alarm screen is intentionally ad-free to avoid accidental clicks around urgent alarm controls.
+Normal app screens use an anchored adaptive AdMob banner at the bottom. The urgent full-screen alarm activity is intentionally ad-free to keep Stop/Snooze controls separate from advertising and reduce accidental clicks.
+
+## Required GitHub repository secrets
+
+### Signing
+
+- `ANDROID_KEYSTORE_BASE64`
+- `ANDROID_STORE_PASSWORD`
+- `ANDROID_KEY_ALIAS`
+- `ANDROID_KEY_PASSWORD`
+
+### AdMob live revenue
+
+- `ADMOB_APP_ID` — format `ca-app-pub-xxxxxxxxxxxxxxxx~yyyyyyyyyy`
+- `ADMOB_BANNER_ID` — format `ca-app-pub-xxxxxxxxxxxxxxxx/zzzzzzzzzz`
+
+The Google Play AAB workflow fails intentionally when either live AdMob ID is missing. Development/CI builds fall back to Google's demo IDs for safe testing.
+
+## AdMob setup
+
+Create/add this exact app in AdMob using package:
+
+`com.aljwaal.newtasks`
+
+Then create an **Adaptive banner** ad unit and put the resulting App ID and Banner Ad Unit ID in the two GitHub secrets above.
+
+For the developer's own devices, enable test-device mode in AdMob while inspecting/clicking ads. Do not click your own live ads.
+
+## Google UMP / consent
+
+The app includes Google User Messaging Platform (UMP) 4.0.0 and refreshes consent information before requesting ads. Publish the appropriate Privacy & messaging message in AdMob, including a European regulations message for EEA/UK/Switzerland traffic.
 
 ## Privacy policy URL after merge to main
 
 `https://github.com/aljwaal1/newtasks/blob/main/PRIVACY_POLICY.md`
 
-The same policy is also accessible inside the app.
+The same policy is accessible inside the app.
+
+## app-ads.txt
+
+Add the developer website to the Play Store listing and keep the publisher's `app-ads.txt` available at the root of that website. AdMob discovers the file from the developer website shown in the store listing.
+
+Before production, verify the app's `app-ads.txt` status inside AdMob.
 
 ## Data safety notes
 
 Task titles, notes, categories, priorities, due dates, completion status, local backups, and diagnostic logs remain local unless the user manually exports or shares them.
 
-Because Google Mobile Ads is present, do not declare the app as collecting no data at all without reviewing the Mobile Ads SDK disclosure. Google advertising services may process technical data such as IP address, device/ad identifiers when available, ad/app interactions, and diagnostics for ad delivery, measurement, and fraud prevention.
+Because Google Mobile Ads is present, do not declare the app as collecting no data at all without reviewing the current Mobile Ads SDK disclosure. Google advertising services may process technical data such as IP address, device/ad identifiers when available, ad/app interactions, and diagnostics for ad delivery, measurement, and fraud prevention.
 
 ## Permissions / declarations to review in Play Console
 
@@ -42,7 +78,7 @@ The app uses:
 - Boot completed
 - Vibration / wake lock
 - Foreground media playback service during alarms
-- Internet and network state for test ads
+- Internet and network state for ads and privacy messaging
 
 The core purpose of exact alarms and full-screen alarm behavior is time-sensitive task reminders. Complete any Google Play declarations shown for these permissions truthfully based on this core function.
 
@@ -67,16 +103,17 @@ The core purpose of exact alarms and full-screen alarm behavior is time-sensitiv
 - تصنيفات وأولويات قابلة للتخصيص.
 - نسخ احتياطي محلي واستيراد وتصدير JSON.
 - بيانات المهام الأساسية تبقى محليًا على جهازك.
-- دعم Android 5.0 فأعلى في هذه النسخة.
+- دعم Android 6.0 فأعلى في هذه النسخة.
 
-هذه النسخة مخصصة للاختبار المغلق وقد تعرض إعلانات Google تجريبية في أسفل الواجهات العادية.
+يحتوي التطبيق على إعلانات Google AdMob في أسفل الواجهات العادية.
 
 ## Before production
 
-1. Replace Google demo AdMob App ID with the real app ID.
-2. Replace demo adaptive banner unit with the real banner unit.
-3. Configure consent/privacy messaging required for production audiences and regions.
-4. Verify `app-ads.txt` for the production AdMob app.
+1. Verify the real AdMob app is linked to `com.aljwaal.newtasks`.
+2. Verify `ADMOB_APP_ID` and `ADMOB_BANNER_ID` secrets.
+3. Publish the required AdMob Privacy & messaging consent messages.
+4. Verify `app-ads.txt` for this app.
 5. Recheck Data safety and Ads declarations.
 6. Increment versionCode for every new upload.
-7. Build a signed AAB using the same upload keystore for all future updates.
+7. Build every Google Play update with the same upload keystore.
+8. Keep the developer's own devices in test-device mode when testing ad clicks.
