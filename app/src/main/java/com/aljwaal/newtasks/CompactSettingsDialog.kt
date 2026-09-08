@@ -17,7 +17,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Alarm
@@ -118,110 +120,118 @@ internal fun CompactSettingsDialog(
             shape = RoundedCornerShape(26.dp),
             color = Color(0xFFF8FAFC)
         ) {
-            Column(
-                modifier = Modifier.fillMaxSize().padding(14.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                SettingsHeader(onDismiss)
-
-                SettingsSectionCard(
-                    icon = Icons.Default.Notifications,
-                    title = "التنبيه والصوت",
-                    description = "الصوت والاهتزاز واختبار التنبيه",
-                    expanded = activeSection == SettingsSection.ALERTS,
-                    onClick = {
-                        activeSection = toggleSection(activeSection, SettingsSection.ALERTS)
-                    }
+            Column(modifier = Modifier.fillMaxSize()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .verticalScroll(rememberScrollState())
+                        .padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    AlarmSettingsContent(
-                        mode = mode,
-                        onMode = {
-                            mode = it
-                            AppPreferences.saveAlarmSoundMode(context, it)
-                        },
-                        onTestNow = onTestNow,
-                        onTestAfter30 = onTestAfter30
-                    )
-                }
+                    SettingsHeader(onDismiss)
 
-                SettingsSectionCard(
-                    icon = Icons.Default.Security,
-                    title = "الصلاحيات",
-                    description = "الإشعارات والمنبه الدقيق والبطارية",
-                    expanded = activeSection == SettingsSection.PERMISSIONS,
-                    onClick = {
-                        activeSection = toggleSection(activeSection, SettingsSection.PERMISSIONS)
-                    }
-                ) {
-                    PermissionsContent(
-                        permissions = permissions,
-                        onRequestNotifications = onRequestNotifications,
-                        onOpenExactAlarmSettings = onOpenExactAlarmSettings,
-                        onOpenFullScreenSettings = onOpenFullScreenSettings,
-                        onOpenNotificationSettings = onOpenNotificationSettings,
-                        onOpenBatterySettings = onOpenBatterySettings
-                    )
-                }
-
-                SettingsSectionCard(
-                    icon = Icons.Default.Tune,
-                    title = "التنظيم",
-                    description = "التصنيفات والأولويات",
-                    expanded = activeSection == SettingsSection.ORGANIZATION,
-                    onClick = {
-                        activeSection = toggleSection(activeSection, SettingsSection.ORGANIZATION)
-                    }
-                ) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        CompactAction(
-                            Icons.Default.Category,
-                            "التصنيفات",
-                            { showCategories = true },
-                            Modifier.weight(1f)
-                        )
-                        CompactAction(
-                            Icons.Default.PriorityHigh,
-                            "الأولويات",
-                            { showPriorities = true },
-                            Modifier.weight(1f)
+                    SettingsSectionCard(
+                        icon = Icons.Default.Notifications,
+                        title = "التنبيه والصوت",
+                        description = "الصوت والاهتزاز واختبار التنبيه",
+                        expanded = activeSection == SettingsSection.ALERTS,
+                        onClick = {
+                            activeSection = toggleSection(activeSection, SettingsSection.ALERTS)
+                        }
+                    ) {
+                        AlarmSettingsContent(
+                            mode = mode,
+                            onMode = {
+                                mode = it
+                                AppPreferences.saveAlarmSoundMode(context, it)
+                            },
+                            onTestNow = onTestNow,
+                            onTestAfter30 = onTestAfter30
                         )
                     }
-                }
 
-                SettingsSectionCard(
-                    icon = Icons.Default.Storage,
-                    title = "البيانات والسجل",
-                    description = "النسخ الاحتياطي والاستيراد والتشخيص",
-                    expanded = activeSection == SettingsSection.DATA,
-                    onClick = {
-                        activeSection = toggleSection(activeSection, SettingsSection.DATA)
+                    SettingsSectionCard(
+                        icon = Icons.Default.Security,
+                        title = "الصلاحيات",
+                        description = "الإشعارات والمنبه الدقيق والبطارية",
+                        expanded = activeSection == SettingsSection.PERMISSIONS,
+                        onClick = {
+                            activeSection = toggleSection(activeSection, SettingsSection.PERMISSIONS)
+                        }
+                    ) {
+                        PermissionsContent(
+                            permissions = permissions,
+                            onRequestNotifications = onRequestNotifications,
+                            onOpenExactAlarmSettings = onOpenExactAlarmSettings,
+                            onOpenFullScreenSettings = onOpenFullScreenSettings,
+                            onOpenNotificationSettings = onOpenNotificationSettings,
+                            onOpenBatterySettings = onOpenBatterySettings
+                        )
                     }
-                ) {
-                    DataSettingsContent(
-                        onShareBackup = onShareBackup,
-                        onImportBackup = onImportBackup,
-                        onCreateLocalBackup = onCreateLocalBackup,
-                        onRestoreLocalBackup = onRestoreLocalBackup,
-                        onShareLog = onShareLog,
-                        onClearLog = onClearLog
+
+                    SettingsSectionCard(
+                        icon = Icons.Default.Tune,
+                        title = "التنظيم",
+                        description = "التصنيفات والأولويات",
+                        expanded = activeSection == SettingsSection.ORGANIZATION,
+                        onClick = {
+                            activeSection = toggleSection(activeSection, SettingsSection.ORGANIZATION)
+                        }
+                    ) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            CompactAction(
+                                Icons.Default.Category,
+                                "التصنيفات",
+                                { showCategories = true },
+                                Modifier.weight(1f)
+                            )
+                            CompactAction(
+                                Icons.Default.PriorityHigh,
+                                "الأولويات",
+                                { showPriorities = true },
+                                Modifier.weight(1f)
+                            )
+                        }
+                    }
+
+                    SettingsSectionCard(
+                        icon = Icons.Default.Storage,
+                        title = "البيانات والسجل",
+                        description = "النسخ الاحتياطي والاستيراد والتشخيص",
+                        expanded = activeSection == SettingsSection.DATA,
+                        onClick = {
+                            activeSection = toggleSection(activeSection, SettingsSection.DATA)
+                        }
+                    ) {
+                        DataSettingsContent(
+                            onShareBackup = onShareBackup,
+                            onImportBackup = onImportBackup,
+                            onCreateLocalBackup = onCreateLocalBackup,
+                            onRestoreLocalBackup = onRestoreLocalBackup,
+                            onShareLog = onShareLog,
+                            onClearLog = onClearLog
+                        )
+                    }
+
+                    DeveloperContactCard {
+                        val emailIntent = Intent(Intent.ACTION_SENDTO).apply {
+                            data = Uri.parse("mailto:fastunllocked2017@gmail.com")
+                            putExtra(Intent.EXTRA_SUBJECT, "Smart Tasks")
+                        }
+                        context.startActivity(emailIntent)
+                    }
+
+                    Text(
+                        "Smart Tasks ${BuildConfig.VERSION_NAME} • Android 6.0 فأعلى",
+                        modifier = Modifier.fillMaxWidth(),
+                        color = Color(0xFF94A3B8),
+                        fontSize = 10.sp
                     )
+                    Spacer(Modifier.height(6.dp))
                 }
 
-                DeveloperContactCard {
-                    val emailIntent = Intent(Intent.ACTION_SENDTO).apply {
-                        data = Uri.parse("mailto:fastunllocked2017@gmail.com")
-                        putExtra(Intent.EXTRA_SUBJECT, "Smart Tasks")
-                    }
-                    context.startActivity(emailIntent)
-                }
-
-                Spacer(Modifier.weight(1f))
-                Text(
-                    "Smart Tasks ${BuildConfig.VERSION_NAME} • Android 5.0 فأعلى",
-                    modifier = Modifier.fillMaxWidth(),
-                    color = Color(0xFF94A3B8),
-                    fontSize = 10.sp
-                )
+                ClosedTestingAdFooter()
             }
         }
     }
