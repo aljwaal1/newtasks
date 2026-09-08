@@ -14,8 +14,8 @@ android {
         applicationId = "com.aljwaal.newtasks"
         minSdk = 21
         targetSdk = 36
-        versionCode = 11
-        versionName = "1.3.4"
+        versionCode = 12
+        versionName = "1.3.5"
 
         // APK عالمي واحد لأجهزة 32-bit و64-bit، بما فيها أجهزة Huawei القديمة.
         ndk {
@@ -90,6 +90,7 @@ dependencies {
     androidTestImplementation(composeBom)
 
     implementation("androidx.core:core-ktx:1.13.1")
+    implementation("androidx.core:core-splashscreen:1.0.1")
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("androidx.compose.ui:ui")
@@ -97,6 +98,10 @@ dependencies {
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
+
+    // v23.6.0 keeps minSdk 21 so the current Android 5.0 support is preserved.
+    // Closed testing uses Google's demo AdMob app/ad unit IDs only.
+    implementation("com.google.android.gms:play-services-ads:23.6.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
