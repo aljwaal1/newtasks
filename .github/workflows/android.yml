@@ -11,6 +11,10 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+concurrency:
+  group: android-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
@@ -68,7 +72,7 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: smart-tasks-universal-android5plus-v1.3.5
+          name: smart-tasks-universal-android6plus-v1.3.5
           path: |
             SmartTasks-1.3.5-Universal.apk
             SmartTasks-1.3.5-Universal.apk.sha256
@@ -87,5 +91,5 @@ jobs:
             SmartTasks-1.3.5-Universal.apk.sha256
           body: |
             نسخة اختبار من Smart Tasks 1.3.5.
-            تضيف شاشة بدء حديثة وسياسة الخصوصية وبانر Google تجريبيًا آمنًا للاختبار المغلق.
-            تدعم Android 5.0 فأعلى وأجهزة 32-bit و64-bit.
+            تتضمن شاشة بدء حديثة وسياسة الخصوصية وGoogle UMP ودعم AdMob الحديث.
+            تدعم Android 6.0 فأعلى وأجهزة 32-bit و64-bit.
