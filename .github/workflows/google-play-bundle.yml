@@ -58,15 +58,15 @@ jobs:
         run: |
           set -euo pipefail
           gradle :app:lintRelease :app:bundleRelease --stacktrace --console=plain
-          cp app/build/outputs/bundle/release/app-release.aab SmartTasks-1.3.4-Play.aab
-          sha256sum SmartTasks-1.3.4-Play.aab > SmartTasks-1.3.4-Play.aab.sha256
+          cp app/build/outputs/bundle/release/app-release.aab SmartTasks-1.3.5-Play.aab
+          sha256sum SmartTasks-1.3.5-Play.aab > SmartTasks-1.3.5-Play.aab.sha256
 
       - name: Upload Play bundle
         uses: actions/upload-artifact@v4
         with:
-          name: smart-tasks-google-play-v1.3.4
+          name: smart-tasks-google-play-v1.3.5
           path: |
-            SmartTasks-1.3.4-Play.aab
-            SmartTasks-1.3.4-Play.aab.sha256
+            SmartTasks-1.3.5-Play.aab
+            SmartTasks-1.3.5-Play.aab.sha256
           if-no-files-found: error
           retention-days: 30
