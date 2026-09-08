@@ -1,10 +1,15 @@
 package com.aljwaal.newtasks
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -24,22 +29,21 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.AdSize
 import com.google.android.gms.ads.AdView
-import com.google.android.gms.ads.MobileAds
-
-private const val GOOGLE_TEST_ADAPTIVE_BANNER = "ca-app-pub-3940256099942544/9214589741"
 
 /**
- * Bottom ad area used only for closed testing.
+ * Anchored adaptive banner footer used by normal app screens.
  *
- * It intentionally uses Google's demo ad unit so test traffic never reaches the publisher account.
- * AlarmActivity is excluded because ads must not compete with urgent alarm controls.
+ * Real revenue ads are enabled only when ADMOB_APP_ID and ADMOB_BANNER_ID are provided
+ * at build time. Without them, Google's demo IDs are used automatically.
+ * AlarmActivity is intentionally excluded from ads to keep urgent controls safe.
  */
 @Composable
 internal fun ClosedTestingAdFooter(modifier: Modifier = Modifier) {
     val context = LocalContext.current
+    val activity = remember(context) { context.findActivity() }
 
-    LaunchedEffect(Unit) {
-        MobileAds.initialize(context.applicationContext) { }
+    LaunchedEffect(activity) {
+        activity?.let { AdConsentGate.start(it) }
     }
 
     Surface(
@@ -57,32 +61,46 @@ internal fun ClosedTestingAdFooter(modifier: Modifier = Modifier) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "نسخة اختبار • إعلان تجريبي",
+                    if (BuildConfig.ADMOB_LIVE_ADS) "إعلان" else "إعلان تجريبي",
                     color = Color(0xFF64748B),
                     fontSize = 9.sp
                 )
-                TextButton(
-                    onClick = {
-                        context.startActivity(Intent(context, PrivacyPolicyActivity::class.java))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (AdConsentGate.privacyOptionsRequired && activity != null) {
+                        TextButton(onClick = { AdConsentGate.showPrivacyOptions(activity) }) {
+                            Text("خيارات الخصوصية", fontSize = 10.sp)
+                        }
                     }
-                ) {
-                    Text("سياسة الخصوصية", fontSize = 10.sp)
+                    TextButton(
+                        onClick = {
+                            context.startActivity(Intent(context, PrivacyPolicyActivity::class.java))
+                        }
+                    ) {
+                        Text("سياسة الخصوصية", fontSize = 10.sp)
+                    }
                 }
             }
-            TestAdaptiveBanner()
+
+            Spacer(Modifier.height(6.dp))
+
+            if (AdConsentGate.canRequestAds) {
+                AdaptiveBanner()
+            } else {
+                Spacer(Modifier.height(2.dp))
+            }
         }
     }
 }
 
 @Composable
-private fun TestAdaptiveBanner() {
+private fun AdaptiveBanner() {
     val context = LocalContext.current
     val screenWidthDp = LocalConfiguration.current.screenWidthDp.coerceAtLeast(320)
-    val adView = remember(screenWidthDp) {
+    val adView = remember(screenWidthDp, BuildConfig.ADMOB_BANNER_ID) {
         AdView(context).apply {
-            adUnitId = GOOGLE_TEST_ADAPTIVE_BANNER
+            adUnitId = BuildConfig.ADMOB_BANNER_ID
             setAdSize(
-                AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(
+                AdSize.getLargeAnchoredAdaptiveBannerAdSize(
                     context,
                     screenWidthDp
                 )
@@ -99,4 +117,10 @@ private fun TestAdaptiveBanner() {
     DisposableEffect(adView) {
         onDispose { adView.destroy() }
     }
+}
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }
