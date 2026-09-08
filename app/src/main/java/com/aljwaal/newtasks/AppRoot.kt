@@ -1,7 +1,10 @@
 package com.aljwaal.newtasks
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.weight
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -65,26 +68,35 @@ fun SmartTasksRoot(
         isLoading = false
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        if (isLoading && tasks.isEmpty()) {
-            CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-        } else {
-            UnifiedTasksScreen(
-                tasks = tasks,
-                priorities = priorities,
-                onAdd = {
-                    editingTask = null
-                    showEditor = true
-                },
-                onSettings = { showSettings = true },
-                onEdit = {
-                    editingTask = it
-                    showEditor = true
-                },
-                onDelete = { deleteCandidate = it },
-                onToggle = onToggleTask
-            )
+    Column(modifier = Modifier.fillMaxSize()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+        ) {
+            if (isLoading && tasks.isEmpty()) {
+                CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+            } else {
+                UnifiedTasksScreen(
+                    tasks = tasks,
+                    priorities = priorities,
+                    onAdd = {
+                        editingTask = null
+                        showEditor = true
+                    },
+                    onSettings = { showSettings = true },
+                    onEdit = {
+                        editingTask = it
+                        showEditor = true
+                    },
+                    onDelete = { deleteCandidate = it },
+                    onToggle = onToggleTask
+                )
+            }
         }
+
+        // Closed-testing banner is deliberately outside interactive task controls.
+        ClosedTestingAdFooter()
     }
 
     if (showEditor) {
