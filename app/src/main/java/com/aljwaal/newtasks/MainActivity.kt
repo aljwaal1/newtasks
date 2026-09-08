@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.core.content.FileProvider
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
 import java.io.File
 import kotlinx.coroutines.Dispatchers
@@ -71,6 +72,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         window.statusBarColor = android.graphics.Color.rgb(242, 244, 255)
         window.navigationBarColor = android.graphics.Color.rgb(18, 24, 45)
