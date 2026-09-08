@@ -20,10 +20,9 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.SmartTasksAlarm">
 
-        <!-- Google demo App ID: closed-testing builds serve test ads only. -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-3940256099942544~3347511713" />
+            android:value="${ADMOB_APP_ID}" />
 
         <activity
             android:name=".AlarmActivity"
