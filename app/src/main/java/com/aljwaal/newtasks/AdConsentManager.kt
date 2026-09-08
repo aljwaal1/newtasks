@@ -1,46 +1,73 @@
 package com.aljwaal.newtasks
 
 import android.app.Activity
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import com.google.android.gms.ads.MobileAds
 import com.google.android.ump.ConsentInformation
 import com.google.android.ump.ConsentRequestParameters
 import com.google.android.ump.UserMessagingPlatform
 
 /**
- * Google UMP consent helper.
- * Consent information is refreshed on every app launch before any live ad request.
+ * Process-level consent gate for Google Mobile Ads.
+ *
+ * The first regular app screen starts the UMP refresh. Ads are requested only when
+ * ConsentInformation.canRequestAds() returns true. AlarmActivity never uses this gate.
  */
-internal class AdConsentManager(private val activity: Activity) {
-    private val consentInformation: ConsentInformation =
-        UserMessagingPlatform.getConsentInformation(activity)
+internal object AdConsentGate {
+    var canRequestAds by mutableStateOf(false)
+        private set
 
-    val canRequestAds: Boolean
-        get() = consentInformation.canRequestAds()
+    var privacyOptionsRequired by mutableStateOf(false)
+        private set
 
-    val isPrivacyOptionsRequired: Boolean
-        get() = consentInformation.privacyOptionsRequirementStatus ==
-            ConsentInformation.PrivacyOptionsRequirementStatus.REQUIRED
+    private var started = false
+    private var adsInitialized = false
 
-    fun gatherConsent(onComplete: () -> Unit) {
+    fun start(activity: Activity) {
+        if (started) return
+        started = true
+
+        val consentInformation = UserMessagingPlatform.getConsentInformation(activity)
         val params = ConsentRequestParameters.Builder().build()
+
+        fun refreshState() {
+            canRequestAds = consentInformation.canRequestAds()
+            privacyOptionsRequired =
+                consentInformation.privacyOptionsRequirementStatus ==
+                    ConsentInformation.PrivacyOptionsRequirementStatus.REQUIRED
+
+            if (canRequestAds && !adsInitialized) {
+                adsInitialized = true
+                MobileAds.initialize(activity.applicationContext) { }
+            }
+        }
 
         consentInformation.requestConsentInfoUpdate(
             activity,
             params,
             {
+                // A valid decision from a previous session can already permit requests.
+                refreshState()
                 UserMessagingPlatform.loadAndShowConsentFormIfRequired(activity) {
-                    onComplete()
+                    refreshState()
                 }
             },
             {
-                // A previous valid consent decision can still permit ads when refresh fails.
-                onComplete()
+                // If refresh fails, UMP may still have a valid prior consent decision.
+                refreshState()
             }
         )
     }
 
-    fun showPrivacyOptions(onDismissed: () -> Unit = {}) {
+    fun showPrivacyOptions(activity: Activity) {
         UserMessagingPlatform.showPrivacyOptionsForm(activity) {
-            onDismissed()
+            val consentInformation = UserMessagingPlatform.getConsentInformation(activity)
+            canRequestAds = consentInformation.canRequestAds()
+            privacyOptionsRequired =
+                consentInformation.privacyOptionsRequirementStatus ==
+                    ConsentInformation.PrivacyOptionsRequirementStatus.REQUIRED
         }
     }
 }
