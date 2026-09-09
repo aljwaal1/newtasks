@@ -7,4 +7,10 @@
         <item name="android:navigationBarColor">#12182D</item>
         <item name="android:colorAccent">#4F46E5</item>
     </style>
+
+    <style name="Theme.SmartTasks.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#4F46E5</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_alarm</item>
+        <item name="postSplashScreenTheme">@style/Theme.SmartTasksAlarm</item>
+    </style>
 </resources>

@@ -6,18 +6,27 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+val demoAdMobAppId = "ca-app-pub-3940256099942544~3347511713"
+val demoBannerId = "ca-app-pub-3940256099942544/9214589741"
+val configuredAdMobAppId = System.getenv("ADMOB_APP_ID")?.takeIf { it.isNotBlank() } ?: demoAdMobAppId
+val configuredBannerId = System.getenv("ADMOB_BANNER_ID")?.takeIf { it.isNotBlank() } ?: demoBannerId
+val liveAdsEnabled = configuredAdMobAppId != demoAdMobAppId && configuredBannerId != demoBannerId
+
 android {
     namespace = "com.aljwaal.newtasks"
     compileSdk = 36
 
     defaultConfig {
         applicationId = "com.aljwaal.newtasks"
-        minSdk = 21
+        minSdk = 23
         targetSdk = 36
-        versionCode = 11
-        versionName = "1.3.4"
+        versionCode = 12
+        versionName = "1.3.5"
 
-        // APK عالمي واحد لأجهزة 32-bit و64-bit، بما فيها أجهزة Huawei القديمة.
+        manifestPlaceholders["ADMOB_APP_ID"] = configuredAdMobAppId
+        buildConfigField("String", "ADMOB_BANNER_ID", "\"$configuredBannerId\"")
+        buildConfigField("boolean", "ADMOB_LIVE_ADS", liveAdsEnabled.toString())
+
         ndk {
             abiFilters += listOf(
                 "armeabi-v7a",
@@ -90,13 +99,18 @@ dependencies {
     androidTestImplementation(composeBom)
 
     implementation("androidx.core:core-ktx:1.13.1")
+    implementation("androidx.core:core-splashscreen:1.0.1")
     implementation("androidx.activity:activity-compose:1.9.3")
+    implementation("androidx.fragment:fragment-ktx:1.9.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
+
+    implementation("com.google.android.gms:play-services-ads:25.4.0")
+    implementation("com.google.android.ump:user-messaging-platform:4.0.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")

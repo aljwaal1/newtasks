@@ -12,8 +12,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Close
@@ -111,194 +113,203 @@ fun TaskEditorDialog(
             shape = RoundedCornerShape(26.dp),
             color = Color(0xFFF8FAFC)
         ) {
-            Column(
-                modifier = Modifier.fillMaxSize().padding(14.dp),
-                verticalArrangement = Arrangement.spacedBy(9.dp)
-            ) {
-                EditorHeader(existing = existing, onDismiss = onDismiss)
-
-                OutlinedTextField(
-                    value = title,
-                    onValueChange = {
-                        title = NumberFormatUtils.latinDigits(it)
-                        error = null
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("ما المهمة؟") },
-                    placeholder = { Text("اكتب عنوانًا واضحًا") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(
-                        capitalization = KeyboardCapitalization.Sentences
-                    ),
-                    shape = RoundedCornerShape(16.dp)
-                )
-
-                Text("الموعد", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(7.dp)
+            Column(modifier = Modifier.fillMaxSize()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .verticalScroll(rememberScrollState())
+                        .padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(9.dp)
                 ) {
-                    QuickDateButton("اليوم", Modifier.weight(1f)) {
-                        dueAt = setRelativeDate(dueAt, 0)
-                        error = null
-                    }
-                    QuickDateButton("غدًا", Modifier.weight(1f)) {
-                        dueAt = setRelativeDate(dueAt, 1)
-                        error = null
-                    }
-                    QuickDateButton("بعد أسبوع", Modifier.weight(1f)) {
-                        dueAt = setRelativeDate(dueAt, 7)
-                        error = null
-                    }
-                }
+                    EditorHeader(existing = existing, onDismiss = onDismiss)
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    DateTimeField(
-                        modifier = Modifier.weight(1f),
-                        icon = Icons.Default.CalendarMonth,
-                        label = "التاريخ",
-                        value = NumberFormatUtils.formatDate(dueAt),
-                        onClick = { showDatePicker = true }
-                    )
-                    DateTimeField(
-                        modifier = Modifier.weight(1f),
-                        icon = Icons.Default.Schedule,
-                        label = "الوقت",
-                        value = NumberFormatUtils.formatTime(dueAt),
-                        onClick = { showTimePicker = true }
-                    )
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    SelectorField(
-                        modifier = Modifier.weight(1f),
-                        label = "الأولوية",
-                        value = priority.label,
-                        options = priorities.map { it.label },
-                        onSelected = { label ->
-                            priority = priorities.firstOrNull { it.label == label }
-                                ?: TaskPriority.NORMAL
-                        }
-                    )
-                    ReminderField(
-                        enabled = reminderEnabled,
-                        onChanged = {
-                            reminderEnabled = it
+                    OutlinedTextField(
+                        value = title,
+                        onValueChange = {
+                            title = NumberFormatUtils.latinDigits(it)
                             error = null
                         },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-
-                TextButton(
-                    onClick = { showAdvanced = !showAdvanced },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(
-                        if (showAdvanced) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                        null
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Text(if (showAdvanced) "إخفاء التفاصيل الإضافية" else "تفاصيل إضافية")
-                }
-
-                if (showAdvanced) {
-                    OutlinedTextField(
-                        value = notes,
-                        onValueChange = { notes = NumberFormatUtils.latinDigits(it) },
                         modifier = Modifier.fillMaxWidth(),
-                        label = { Text("ملاحظات") },
+                        label = { Text("ما المهمة؟") },
+                        placeholder = { Text("اكتب عنوانًا واضحًا") },
                         singleLine = true,
-                        shape = RoundedCornerShape(14.dp)
+                        keyboardOptions = KeyboardOptions(
+                            capitalization = KeyboardCapitalization.Sentences
+                        ),
+                        shape = RoundedCornerShape(16.dp)
                     )
+
+                    Text("الموعد", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(7.dp)
+                    ) {
+                        QuickDateButton("اليوم", Modifier.weight(1f)) {
+                            dueAt = setRelativeDate(dueAt, 0)
+                            error = null
+                        }
+                        QuickDateButton("غدًا", Modifier.weight(1f)) {
+                            dueAt = setRelativeDate(dueAt, 1)
+                            error = null
+                        }
+                        QuickDateButton("بعد أسبوع", Modifier.weight(1f)) {
+                            dueAt = setRelativeDate(dueAt, 7)
+                            error = null
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        DateTimeField(
+                            modifier = Modifier.weight(1f),
+                            icon = Icons.Default.CalendarMonth,
+                            label = "التاريخ",
+                            value = NumberFormatUtils.formatDate(dueAt),
+                            onClick = { showDatePicker = true }
+                        )
+                        DateTimeField(
+                            modifier = Modifier.weight(1f),
+                            icon = Icons.Default.Schedule,
+                            label = "الوقت",
+                            value = NumberFormatUtils.formatTime(dueAt),
+                            onClick = { showTimePicker = true }
+                        )
+                    }
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         SelectorField(
                             modifier = Modifier.weight(1f),
-                            label = "التصنيف",
-                            value = category,
-                            options = categories,
-                            onSelected = { category = NumberFormatUtils.latinDigits(it) }
-                        )
-                        SelectorField(
-                            modifier = Modifier.weight(1f),
-                            label = "التكرار",
-                            value = repeatRule.label,
-                            options = RepeatRule.entries.map { it.label },
+                            label = "الأولوية",
+                            value = priority.label,
+                            options = priorities.map { it.label },
                             onSelected = { label ->
-                                repeatRule = RepeatRule.entries.first { it.label == label }
+                                priority = priorities.firstOrNull { it.label == label }
+                                    ?: TaskPriority.NORMAL
                             }
                         )
+                        ReminderField(
+                            enabled = reminderEnabled,
+                            onChanged = {
+                                reminderEnabled = it
+                                error = null
+                            },
+                            modifier = Modifier.weight(1f)
+                        )
                     }
-                }
 
-                error?.let {
-                    Text(
-                        it,
-                        color = MaterialTheme.colorScheme.error,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 12.sp,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-
-                Spacer(Modifier.weight(1f))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.weight(1f).height(52.dp),
-                        shape = RoundedCornerShape(16.dp)
+                    TextButton(
+                        onClick = { showAdvanced = !showAdvanced },
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("إلغاء")
+                        Icon(
+                            if (showAdvanced) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                            null
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(if (showAdvanced) "إخفاء التفاصيل الإضافية" else "تفاصيل إضافية")
                     }
-                    Button(
-                        onClick = {
-                            val cleanTitle = NumberFormatUtils.latinDigits(title).trim()
-                            val cleanNotes = NumberFormatUtils.latinDigits(notes).trim()
-                            val cleanCategory = NumberFormatUtils.latinDigits(category).trim()
-                                .ifBlank { "عام" }
-                            when {
-                                cleanTitle.isEmpty() -> error = "اكتب عنوان المهمة."
-                                reminderEnabled && dueAt <= System.currentTimeMillis() + 1_000L ->
-                                    error = "اختر موعدًا قادمًا للتنبيه."
-                                else -> onSave(
-                                    (existing ?: TaskItem(
-                                        title = cleanTitle,
-                                        dueAtMillis = dueAt
-                                    )).copy(
-                                        title = cleanTitle,
-                                        notes = cleanNotes,
-                                        category = cleanCategory,
-                                        dueAtMillis = dueAt,
-                                        priority = priority,
-                                        repeatRule = repeatRule,
-                                        reminderEnabled = reminderEnabled,
-                                        status = existing?.status ?: TaskStatus.PENDING
-                                    )
-                                )
-                            }
-                        },
-                        modifier = Modifier.weight(1.35f).height(52.dp),
-                        shape = RoundedCornerShape(16.dp)
-                    ) {
+
+                    if (showAdvanced) {
+                        OutlinedTextField(
+                            value = notes,
+                            onValueChange = { notes = NumberFormatUtils.latinDigits(it) },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("ملاحظات") },
+                            singleLine = true,
+                            shape = RoundedCornerShape(14.dp)
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            SelectorField(
+                                modifier = Modifier.weight(1f),
+                                label = "التصنيف",
+                                value = category,
+                                options = categories,
+                                onSelected = { category = NumberFormatUtils.latinDigits(it) }
+                            )
+                            SelectorField(
+                                modifier = Modifier.weight(1f),
+                                label = "التكرار",
+                                value = repeatRule.label,
+                                options = RepeatRule.entries.map { it.label },
+                                onSelected = { label ->
+                                    repeatRule = RepeatRule.entries.first { it.label == label }
+                                }
+                            )
+                        }
+                    }
+
+                    error?.let {
                         Text(
-                            if (existing == null) "إضافة المهمة" else "حفظ التعديل",
-                            fontWeight = FontWeight.Bold
+                            it,
+                            color = MaterialTheme.colorScheme.error,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 12.sp,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
+
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = onDismiss,
+                            modifier = Modifier.weight(1f).height(52.dp),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Text("إلغاء")
+                        }
+                        Button(
+                            onClick = {
+                                val cleanTitle = NumberFormatUtils.latinDigits(title).trim()
+                                val cleanNotes = NumberFormatUtils.latinDigits(notes).trim()
+                                val cleanCategory = NumberFormatUtils.latinDigits(category).trim()
+                                    .ifBlank { "عام" }
+                                when {
+                                    cleanTitle.isEmpty() -> error = "اكتب عنوان المهمة."
+                                    reminderEnabled && dueAt <= System.currentTimeMillis() + 1_000L ->
+                                        error = "اختر موعدًا قادمًا للتنبيه."
+                                    else -> onSave(
+                                        (existing ?: TaskItem(
+                                            title = cleanTitle,
+                                            dueAtMillis = dueAt
+                                        )).copy(
+                                            title = cleanTitle,
+                                            notes = cleanNotes,
+                                            category = cleanCategory,
+                                            dueAtMillis = dueAt,
+                                            priority = priority,
+                                            repeatRule = repeatRule,
+                                            reminderEnabled = reminderEnabled,
+                                            status = existing?.status ?: TaskStatus.PENDING
+                                        )
+                                    )
+                                }
+                            },
+                            modifier = Modifier.weight(1.35f).height(52.dp),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Text(
+                                if (existing == null) "إضافة المهمة" else "حفظ التعديل",
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(6.dp))
                 }
+
+                ClosedTestingAdFooter()
             }
         }
     }

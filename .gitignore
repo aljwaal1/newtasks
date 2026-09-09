@@ -8,3 +8,12 @@
 .externalNativeBuild/
 .cxx/
 app/build/
+
+# Never commit Android signing credentials or exported repository secrets.
+*.jks
+*.keystore
+keystore/
+GITHUB_SECRETS.txt
+*.secrets
+.env
+.env.*
