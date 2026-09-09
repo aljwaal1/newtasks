@@ -52,7 +52,7 @@
 
 لأي استفسار متعلق بالتطبيق أو الخصوصية:
 
-**fastunllocked2017@gmail.com**
+**fastunlocked2017@gmail.com**
 
 ## 10. تحديث السياسة
 
