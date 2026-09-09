@@ -216,7 +216,7 @@ internal fun CompactSettingsDialog(
 
                     DeveloperContactCard {
                         val emailIntent = Intent(Intent.ACTION_SENDTO).apply {
-                            data = Uri.parse("mailto:fastunllocked2017@gmail.com")
+                            data = Uri.parse("mailto:fastunlocked2017@gmail.com")
                             putExtra(Intent.EXTRA_SUBJECT, "Smart Tasks")
                         }
                         context.startActivity(emailIntent)
@@ -307,7 +307,7 @@ private fun DeveloperContactCard(onClick: () -> Unit) {
             Column(modifier = Modifier.weight(1f)) {
                 Text("مراسلة المطور", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 Text(
-                    "fastunllocked2017@gmail.com",
+                    "fastunlocked2017@gmail.com",
                     color = Color(0xFF64748B),
                     fontSize = 10.sp,
                     maxLines = 1,
