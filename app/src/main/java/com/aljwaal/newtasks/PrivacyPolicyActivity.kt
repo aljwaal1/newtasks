@@ -71,7 +71,7 @@ class PrivacyPolicyActivity : ComponentActivity() {
                             )
                             PolicySection(
                                 "التواصل",
-                                "للاستفسار المتعلق بالخصوصية أو التطبيق: fastunllocked2017@gmail.com"
+                                "للاستفسار المتعلق بالخصوصية أو التطبيق: fastunlocked2017@gmail.com"
                             )
                             PolicySection(
                                 "التغييرات",
