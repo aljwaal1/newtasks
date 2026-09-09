@@ -94,7 +94,11 @@ fun SmartTasksRoot(
             }
         }
 
-        ClosedTestingAdFooter()
+        // Only the currently active normal screen owns an ad view.
+        // Full-screen editor/settings dialogs provide their own footer banner.
+        if (!showEditor && !showSettings) {
+            ClosedTestingAdFooter()
+        }
     }
 
     if (showEditor) {
