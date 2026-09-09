@@ -8,7 +8,7 @@
 - Version code: `12`
 - Target SDK: `36`
 - Minimum SDK: `23` (Android 6.0+)
-- Contact email: `fastunllocked2017@gmail.com`
+- Contact email: `fastunlocked2017@gmail.com`
 
 ## Release track
 
@@ -34,7 +34,7 @@ Normal app screens use an anchored adaptive AdMob banner at the bottom. The urge
 - `ADMOB_APP_ID` — format `ca-app-pub-xxxxxxxxxxxxxxxx~yyyyyyyyyy`
 - `ADMOB_BANNER_ID` — format `ca-app-pub-xxxxxxxxxxxxxxxx/zzzzzzzzzz`
 
-The Google Play AAB workflow fails intentionally when either live AdMob ID is missing. Development/CI builds fall back to Google's demo IDs for safe testing.
+The Google Play AAB workflow uses Google's demo IDs when the live AdMob IDs are not configured, and uses the real IDs automatically once both secrets are present.
 
 ## AdMob setup
 
@@ -48,7 +48,7 @@ For the developer's own devices, enable test-device mode in AdMob while inspecti
 
 ## Google UMP / consent
 
-The app includes Google User Messaging Platform (UMP) 4.0.0 and refreshes consent information before requesting ads. Publish the appropriate Privacy & messaging message in AdMob, including a European regulations message for EEA/UK/Switzerland traffic.
+The app includes Google User Messaging Platform (UMP) and refreshes consent information before requesting ads. Publish the appropriate Privacy & messaging message in AdMob, including a European regulations message for EEA/UK/Switzerland traffic when applicable.
 
 ## Privacy policy URL after merge to main
 
