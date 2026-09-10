@@ -20,8 +20,8 @@ android {
         applicationId = "com.aljwaal.newtasks"
         minSdk = 23
         targetSdk = 36
-        versionCode = 12
-        versionName = "1.3.5"
+        versionCode = 13
+        versionName = "1.3.6"
 
         manifestPlaceholders["ADMOB_APP_ID"] = configuredAdMobAppId
         buildConfigField("String", "ADMOB_BANNER_ID", "\"$configuredBannerId\"")
@@ -65,7 +65,11 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            ndk {
+                debugSymbolLevel = "SYMBOL_TABLE"
+            }
             if (signingConfigs.names.contains("playRelease")) {
                 signingConfig = signingConfigs.getByName("playRelease")
             }
