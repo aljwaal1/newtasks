@@ -1,11 +1,11 @@
-# Google Play Closed Testing — Smart Tasks 1.3.5
+# Google Play Closed Testing — Smart Tasks 1.3.6
 
 ## App identity
 
 - App name: منبه المهام الذكي
 - Package: `com.aljwaal.newtasks`
-- Version name: `1.3.5`
-- Version code: `12`
+- Version name: `1.3.6`
+- Version code: `13`
 - Target SDK: `36`
 - Minimum SDK: `23` (Android 6.0+)
 - Contact email: `fastunlocked2017@gmail.com`
@@ -50,15 +50,17 @@ For the developer's own devices, enable test-device mode in AdMob while inspecti
 
 The app includes Google User Messaging Platform (UMP) and refreshes consent information before requesting ads. Publish the appropriate Privacy & messaging message in AdMob, including a European regulations message for EEA/UK/Switzerland traffic when applicable.
 
-## Privacy policy URL after merge to main
+## Privacy policy URL
 
-`https://github.com/aljwaal1/newtasks/blob/main/PRIVACY_POLICY.md`
+`https://apps.explapp.com/privacy-smarttasks.html`
 
 The same policy is accessible inside the app.
 
 ## app-ads.txt
 
-Add the developer website to the Play Store listing and keep the publisher's `app-ads.txt` available at the root of that website. AdMob discovers the file from the developer website shown in the store listing.
+Developer website: `https://apps.explapp.com/`
+
+Authorized sellers file: `https://apps.explapp.com/app-ads.txt`
 
 Before production, verify the app's `app-ads.txt` status inside AdMob.
 
