@@ -48,15 +48,15 @@ jobs:
           fi
           echo "===== ANDROID CHECK SUCCESS — LAST 60 LINES ====="
           tail -n 60 gradle-build.log
-          cp app/build/outputs/apk/debug/app-debug.apk SmartTasks-1.3.5-Universal.apk
-          unzip -t SmartTasks-1.3.5-Universal.apk
-          sha256sum SmartTasks-1.3.5-Universal.apk | tee SmartTasks-1.3.5-Universal.apk.sha256
+          cp app/build/outputs/apk/debug/app-debug.apk SmartTasks-1.3.6-Universal.apk
+          unzip -t SmartTasks-1.3.6-Universal.apk
+          sha256sum SmartTasks-1.3.6-Universal.apk | tee SmartTasks-1.3.6-Universal.apk.sha256
 
       - name: Upload build log
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: smart-tasks-gradle-log-v1.3.5
+          name: smart-tasks-gradle-log-v1.3.6
           path: gradle-build.log
           if-no-files-found: ignore
 
@@ -64,7 +64,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: smart-tasks-lint-report-v1.3.5
+          name: smart-tasks-lint-report-v1.3.6
           path: app/build/reports/lint-results-debug.html
           if-no-files-found: ignore
 
@@ -72,24 +72,24 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: smart-tasks-universal-android6plus-v1.3.5
+          name: smart-tasks-universal-android6plus-v1.3.6
           path: |
-            SmartTasks-1.3.5-Universal.apk
-            SmartTasks-1.3.5-Universal.apk.sha256
+            SmartTasks-1.3.6-Universal.apk
+            SmartTasks-1.3.6-Universal.apk.sha256
 
       - name: Publish direct GitHub download
         if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.3.5-test
-          name: Smart Tasks 1.3.5 Test
+          tag_name: v1.3.6-test
+          name: Smart Tasks 1.3.6 Test
           prerelease: true
           target_commitish: ${{ github.sha }}
           fail_on_unmatched_files: true
           files: |
-            SmartTasks-1.3.5-Universal.apk
-            SmartTasks-1.3.5-Universal.apk.sha256
+            SmartTasks-1.3.6-Universal.apk
+            SmartTasks-1.3.6-Universal.apk.sha256
           body: |
-            نسخة اختبار من Smart Tasks 1.3.5.
-            تتضمن شاشة بدء حديثة وسياسة الخصوصية وGoogle UMP ودعم AdMob الحديث.
+            نسخة اختبار من Smart Tasks 1.3.6.
+            تتضمن R8 وتقليص الموارد وإعداد رموز تصحيح Native لإصدارات Google Play.
             تدعم Android 6.0 فأعلى وأجهزة 32-bit و64-bit.
