@@ -3,6 +3,8 @@ name: Build Google Play AAB
 on:
   push:
     branches: [ main ]
+    paths-ignore:
+      - "**/*.md"
   workflow_dispatch:
 
 permissions:
