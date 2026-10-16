@@ -186,6 +186,94 @@ object AlarmScheduler {
         AppLog.write(context, "TASK_ALARM_CANCELLED", "task=$taskId followUpRemoved=true")
     }
 
+    fun restoreAfterBoot(context: Context): Int {
+        var restored = 0
+        val now = System.currentTimeMillis()
+        val storedFollowUps = FollowUpReminderStore.all(context)
+
+        TaskRepository.list(context)
+            .filter { it.status == TaskStatus.PENDING && it.reminderEnabled }
+            .forEach { task ->
+                if (storedFollowUps.containsKey(task.id)) return@forEach
+
+                if (task.dueAtMillis > now) {
+                    if (scheduleTask(context, task).success) restored++
+                    return@forEach
+                }
+
+                if (task.lastNotifiedAtMillis >= task.dueAtMillis) {
+                    val next = TaskRepository.nextOccurrence(task)
+                    if (next != null) {
+                        val updated = task.copy(
+                            dueAtMillis = next,
+                            lastNotifiedAtMillis = 0L
+                        )
+                        TaskRepository.save(context, updated)
+                        if (scheduleTask(context, updated).success) restored++
+                    }
+                    return@forEach
+                }
+
+                // Android 15+ restricts starting mediaPlayback foreground services from
+                // BOOT_COMPLETED. For overdue items we keep the reminder visible without
+                // starting the alarm foreground service immediately after boot.
+                AlarmNotification.postVisualReminder(
+                    context = context,
+                    taskId = task.id,
+                    title = task.title,
+                    notes = task.notes,
+                    kind = KIND_TASK
+                )
+                TaskRepository.updateLastNotified(context, task.id)
+                AppLog.write(
+                    context,
+                    "BOOT_OVERDUE_REMINDER_POSTED",
+                    "task=${task.id} foregroundServiceStarted=false"
+                )
+            }
+
+        storedFollowUps.forEach { (taskId, storedTrigger) ->
+            val task = TaskRepository.get(context, taskId)
+            if (task == null || task.status == TaskStatus.COMPLETED || !task.reminderEnabled) {
+                FollowUpReminderStore.remove(context, taskId)
+                return@forEach
+            }
+
+            if (storedTrigger > now) {
+                if (
+                    scheduleFollowUp(
+                        context = context,
+                        taskId = taskId,
+                        title = task.title,
+                        notes = task.notes,
+                        triggerAtMillis = storedTrigger,
+                        source = "restore_boot"
+                    ).success
+                ) {
+                    restored++
+                }
+            } else {
+                FollowUpReminderStore.remove(context, taskId)
+                AlarmNotification.postVisualReminder(
+                    context = context,
+                    taskId = taskId,
+                    title = task.title,
+                    notes = task.notes,
+                    kind = KIND_FOLLOW_UP
+                )
+                TaskRepository.updateLastNotified(context, taskId)
+                AppLog.write(
+                    context,
+                    "BOOT_OVERDUE_FOLLOW_UP_POSTED",
+                    "task=$taskId foregroundServiceStarted=false"
+                )
+            }
+        }
+
+        AppLog.write(context, "BOOT_ALARMS_RESTORED", "count=$restored")
+        return restored
+    }
+
     fun restoreAll(context: Context, reason: String): Int {
         var restored = 0
         val now = System.currentTimeMillis()
