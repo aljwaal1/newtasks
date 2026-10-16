@@ -1,13 +1,13 @@
-# Google Play Closed Testing — Smart Tasks 1.3.6
+# Google Play Closed Testing — Smart Tasks 1.3.9
 
 ## App identity
 
 - App name: منبه المهام الذكي
 - Package: `com.aljwaal.newtasks`
-- Version name: `1.3.6`
-- Version code: `13`
+- Version name: `1.3.9`
+- Version code: `16`
 - Target SDK: `36`
-- Minimum SDK: `23` (Android 6.0+)
+- Minimum SDK: `24` (Android 7.0+)
 - Contact email: `fastunlocked2017@gmail.com`
 
 ## Release track
@@ -105,7 +105,7 @@ The core purpose of exact alarms and full-screen alarm behavior is time-sensitiv
 - تصنيفات وأولويات قابلة للتخصيص.
 - نسخ احتياطي محلي واستيراد وتصدير JSON.
 - بيانات المهام الأساسية تبقى محليًا على جهازك.
-- دعم Android 6.0 فأعلى في هذه النسخة.
+- دعم Android 7.0 فأعلى في هذه النسخة.
 
 يحتوي التطبيق على إعلانات Google AdMob في أسفل الواجهات العادية.
 
