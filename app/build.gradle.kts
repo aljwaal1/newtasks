@@ -20,8 +20,8 @@ android {
         applicationId = "com.aljwaal.newtasks"
         minSdk = 24
         targetSdk = 36
-        versionCode = 16
-        versionName = "1.3.9"
+        versionCode = 17
+        versionName = "1.3.10"
 
         manifestPlaceholders["ADMOB_APP_ID"] = configuredAdMobAppId
         buildConfigField("String", "ADMOB_BANNER_ID", "\"$configuredBannerId\"")
