@@ -182,7 +182,11 @@ class SystemEventReceiver : BroadcastReceiver() {
             try {
                 AppLog.write(appContext, "SYSTEM_EVENT_RECEIVED", "action=$action")
                 AlarmNotification.ensureChannel(appContext)
-                AlarmScheduler.restoreAll(appContext, action)
+                if (action == Intent.ACTION_BOOT_COMPLETED) {
+                    AlarmScheduler.restoreAfterBoot(appContext)
+                } else {
+                    AlarmScheduler.restoreAll(appContext, action)
+                }
             } catch (error: Throwable) {
                 AppLog.write(
                     appContext,
