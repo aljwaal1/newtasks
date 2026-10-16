@@ -34,6 +34,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -89,6 +90,7 @@ internal fun UnifiedTasksScreen(
                 onSettings = onSettings
             )
             SummaryRow(tasks = tasks, now = now)
+            ProgressOverview(tasks = tasks)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
@@ -189,6 +191,58 @@ private fun SummaryRow(tasks: List<TaskItem>, now: Long) {
 }
 
 @Composable
+private fun ProgressOverview(tasks: List<TaskItem>) {
+    val total = tasks.size
+    val completed = tasks.count { it.status == TaskStatus.COMPLETED }
+    val progress = if (total == 0) 0f else completed.toFloat() / total.toFloat()
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        color = Color.White,
+        shadowElevation = 1.dp
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 11.dp),
+            verticalArrangement = Arrangement.spacedBy(7.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "تقدّمك",
+                    modifier = Modifier.weight(1f),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp,
+                    color = Color(0xFF0F172A)
+                )
+                Text(
+                    if (total == 0) "ابدأ أول مهمة" else "${NumberFormatUtils.number(completed)} من ${NumberFormatUtils.number(total)}",
+                    fontSize = 11.sp,
+                    color = Color(0xFF64748B)
+                )
+            }
+            LinearProgressIndicator(
+                progress = { progress },
+                modifier = Modifier.fillMaxWidth().height(7.dp),
+                color = Color(0xFF5138EE),
+                trackColor = Color(0xFFE8E7FF)
+            )
+            if (total > 0) {
+                Text(
+                    when {
+                        progress >= 1f -> "أحسنت، أنجزت جميع مهامك."
+                        progress >= 0.5f -> "تقدّم ممتاز، بقي القليل."
+                        completed > 0 -> "بداية جيدة، استمر."
+                        else -> "ابدأ بمهمة واحدة وخذها خطوة بخطوة."
+                    },
+                    fontSize = 10.sp,
+                    color = Color(0xFF64748B)
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun SummaryCard(
     label: String,
     value: Int,
@@ -230,9 +284,9 @@ private fun EmptyTasks(onAdd: () -> Unit) {
             modifier = Modifier.size(54.dp)
         )
         Spacer(Modifier.height(8.dp))
-        Text("لا توجد مهام", fontWeight = FontWeight.Bold, color = Color(0xFF334155))
-        Text("ابدأ بإضافة مهمة جديدة", color = Color(0xFF94A3B8), fontSize = 12.sp)
-        TextButton(onClick = onAdd) { Text("إضافة الآن") }
+        Text("يومك جاهز للترتيب", fontWeight = FontWeight.Bold, color = Color(0xFF334155))
+        Text("أضف أول مهمة وحدد وقتها وأولويتها", color = Color(0xFF94A3B8), fontSize = 12.sp)
+        TextButton(onClick = onAdd) { Text("إضافة أول مهمة") }
     }
 }
 
