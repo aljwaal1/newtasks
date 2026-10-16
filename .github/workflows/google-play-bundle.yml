@@ -79,39 +79,39 @@ jobs:
           fi
 
           gradle :app:lintRelease :app:bundleRelease --stacktrace --console=plain
-          cp app/build/outputs/bundle/release/app-release.aab SmartTasks-1.3.9-Play.aab
-          sha256sum SmartTasks-1.3.9-Play.aab > SmartTasks-1.3.9-Play.aab.sha256
+          cp app/build/outputs/bundle/release/app-release.aab SmartTasks-1.3.10-Play.aab
+          sha256sum SmartTasks-1.3.10-Play.aab > SmartTasks-1.3.10-Play.aab.sha256
 
           test -s app/build/outputs/mapping/release/mapping.txt || {
             echo "R8 mapping.txt was not generated" >&2
             exit 1
           }
-          cp app/build/outputs/mapping/release/mapping.txt SmartTasks-1.3.9-mapping.txt
+          cp app/build/outputs/mapping/release/mapping.txt SmartTasks-1.3.10-mapping.txt
 
-          unzip -l SmartTasks-1.3.9-Play.aab > SmartTasks-1.3.9-bundle-contents.txt
-          grep -q "BUNDLE-METADATA/com.android.tools.build.obfuscation/proguard.map" SmartTasks-1.3.9-bundle-contents.txt || {
+          unzip -l SmartTasks-1.3.10-Play.aab > SmartTasks-1.3.10-bundle-contents.txt
+          grep -q "BUNDLE-METADATA/com.android.tools.build.obfuscation/proguard.map" SmartTasks-1.3.10-bundle-contents.txt || {
             echo "R8 mapping metadata is missing from the AAB" >&2
             exit 1
           }
 
           if [ -s app/build/outputs/native-debug-symbols/release/native-debug-symbols.zip ]; then
-            cp app/build/outputs/native-debug-symbols/release/native-debug-symbols.zip SmartTasks-1.3.9-native-debug-symbols.zip
+            cp app/build/outputs/native-debug-symbols/release/native-debug-symbols.zip SmartTasks-1.3.10-native-debug-symbols.zip
           else
             echo "No standalone native-debug-symbols.zip was produced; checking AAB metadata."
           fi
 
           echo "===== Bundle metadata ====="
-          grep "BUNDLE-METADATA" SmartTasks-1.3.9-bundle-contents.txt || true
+          grep "BUNDLE-METADATA" SmartTasks-1.3.10-bundle-contents.txt || true
 
       - name: Upload Play bundle and debug metadata
         uses: actions/upload-artifact@v4
         with:
-          name: smart-tasks-google-play-v1.3.9
+          name: smart-tasks-google-play-v1.3.10
           path: |
-            SmartTasks-1.3.9-Play.aab
-            SmartTasks-1.3.9-Play.aab.sha256
-            SmartTasks-1.3.9-mapping.txt
-            SmartTasks-1.3.9-native-debug-symbols.zip
-            SmartTasks-1.3.9-bundle-contents.txt
+            SmartTasks-1.3.10-Play.aab
+            SmartTasks-1.3.10-Play.aab.sha256
+            SmartTasks-1.3.10-mapping.txt
+            SmartTasks-1.3.10-native-debug-symbols.zip
+            SmartTasks-1.3.10-bundle-contents.txt
           if-no-files-found: warn
           retention-days: 30
