@@ -1,14 +1,26 @@
-# Google Play Closed Testing — Smart Tasks 1.3.9
+# Google Play Closed Testing — Smart Tasks 1.3.10
 
 ## App identity
 
 - App name: منبه المهام الذكي
 - Package: `com.aljwaal.newtasks`
-- Version name: `1.3.9`
-- Version code: `16`
+- Version name: `1.3.10`
+- Version code: `17`
 - Target SDK: `36`
 - Minimum SDK: `24` (Android 7.0+)
 - Contact email: `fastunlocked2017@gmail.com`
+
+## Current release status
+
+- Current reference release: **1.3.10**
+- Version code: **17**
+- Status: **Uploaded to Google Play**
+- Build type: **Signed Android App Bundle (AAB)**
+- Minimum SDK: **24**
+- Target SDK: **36**
+- R8/minification: **Enabled**
+- Production AdMob banner: **Enabled**
+- This is the baseline for the next update. Do not reuse version code 17.
 
 ## Release track
 
